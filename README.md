@@ -1,10 +1,10 @@
-# magnemnu.ldg
+# magnemu.ldg
 
 Library using the LDG system and the Magnetic Scrolls Emulator.
 
 Used by:
 
-* GEMagnetic
+* GEMagnetic, GEM port recoded in GFA (previously GEM port in C written by Dan Ackerman)
 
 # installation for makefiles
 
@@ -13,6 +13,6 @@ Used by:
    ```mkdir ./build/68020```  
    ```mkdir ./build/ColdFire```  
 
-- get /magnemu.ldg/ from [magnemu_r1_src.zip](https://ptonthat.fr/files/gemagnetic/gemagnetic10_src.zip) and unpack the contents to ./
+- get /magnemu.ldg/ from [gemagnetic10_src.zip](https://ptonthat.fr/files/gemagnetic/gemagnetic10_src.zip) and unpack the contents to ./
 
 - magnemu.ldg.xcodeproj is for Xcode 26.1, you may not need it if you use something else.
