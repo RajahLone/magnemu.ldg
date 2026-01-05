@@ -17,9 +17,8 @@
 /* global variables */
 
 #define SAVEDGAME_NAME_SIZE 384
-#define TEXT_BUFFER_SIZE 1024
-#define STATUS_BUFFER_SIZE 128
-#define STATUS_WIDTH 78
+#define TEXT_BUFFER_SIZE 4096
+#define STATUS_BUFFER_SIZE 78
 #define ACTION_BUFFER_SIZE 256
 
 static char savedgame_ptr[SAVEDGAME_NAME_SIZE];
@@ -29,10 +28,12 @@ static int32_t is_fatal = 0;
 
 static char text_buffer_ptr[TEXT_BUFFER_SIZE];
 static uint16_t text_buffer_pos = 0;
+static uint16_t text_has_endline = 0;
+static uint16_t text_has_prompt = 0;
 
 static char status_buffer_ptr[STATUS_BUFFER_SIZE];
 static uint16_t status_buffer_pos = 0;
-static int32_t status_updated = 0;
+static uint16_t status_updated = 0;
 
 static char action_buffer_ptr[ACTION_BUFFER_SIZE];
 static uint16_t action_buffer_pos = 0;
@@ -52,53 +53,67 @@ void ms_flush(void)
   if (text_buffer_pos == 0) { return; }
   
   text_buffer_pos = 0;
+  text_has_endline = 0;
+  
   memset(text_buffer_ptr, 0, TEXT_BUFFER_SIZE);
 }
 void ms_putchar(uint8_t c)
 {
-  switch (c)
+  if (text_buffer_pos < TEXT_BUFFER_SIZE)
   {
-    case 0x0a: text_buffer_ptr[text_buffer_pos++]= '\0'; ms_flush(); break;
-    case 0x08: if (text_buffer_pos > 0) { text_buffer_pos--; } break;
-    default: text_buffer_ptr[text_buffer_pos++] = c;
+    switch(c)
+    {
+      case 0x00:
+        text_buffer_ptr[text_buffer_pos] = c;
+        break;
+      case 0x08:
+        if (text_buffer_pos > 0) { text_buffer_pos--; }
+        break;
+      case 0x0a:
+        text_buffer_ptr[text_buffer_pos++] = c;
+        text_has_endline = 1;
+        break;
+      case 0x3e:
+        //text_buffer_ptr[text_buffer_pos++] = 0x3c;
+        text_has_prompt = 1;
+        break;
+      default:
+        text_buffer_ptr[text_buffer_pos++] = c;
+    }
   }
 }
 void ms_statuschar(unsigned char c)
 {
   if (c == 0x0a)
   {
-    status_buffer_pos = 0;
-    status_buffer_ptr[status_buffer_pos] = 0;
+    status_updated = 1;
   }
   else if (c == 0x09)
   {
-    while (status_buffer_pos < STATUS_WIDTH - 11)
+    while (status_buffer_pos < STATUS_BUFFER_SIZE - 11)
     {
       status_buffer_ptr[status_buffer_pos] = 0x20;
       status_buffer_pos++;
     }
   }
-  else if (status_buffer_pos < STATUS_BUFFER_SIZE - 1)
+  else if (status_buffer_pos < STATUS_BUFFER_SIZE)
   {
     status_buffer_ptr[status_buffer_pos] = c;
     status_buffer_pos++;
   }
-  
-  status_updated = 1;
 }
 
 uint8_t ms_getchar(type8 trans)
 {
-  uint16_t c = action_buffer_ptr[action_buffer_pos++];
+  uint8_t c = action_buffer_ptr[action_buffer_pos++];
   
   if (c == 0x0a || c == 0)
   {
-    c = 0x0a;
     action_buffer_pos = 0;
-    action_buffer_ptr[0] = 0;
+    memset(action_buffer_ptr, 0, ACTION_BUFFER_SIZE);
   }
 
-  return (uint8_t)c;
+  return c;
 }
 
 void ms_showpic(type32 c, type8 mode)
@@ -125,20 +140,21 @@ void ms_showpic(type32 c, type8 mode)
     picture_height = 0;
   }
 }
-
+type8 ms_showhints(struct ms_hint * hints)
+{
+  // TODO: handle hints
+  return 1;
+}
 void ms_playmusic(type8 *midi_data, type32 length, type16 tempo)
 {
   // TODO: if MIDI available?
-}
-type8 ms_showhints(struct ms_hint * hints)
-{
-  // TODO: openHints(hints)?
-  return 1;
 }
 
 unsigned char ms_load_file(type8s *name, type8 *ptr, type16 size)
 {
   FILE *fh;
+  
+  if (strlen(savedgame_ptr) == 0) { return 1; }
   
   if (!(fh = fopen(savedgame_ptr, "rb"))) { return 1; }
   if (fread(ptr, 1, size, fh) != size) { return 1; }
@@ -149,6 +165,8 @@ unsigned char ms_load_file(type8s *name, type8 *ptr, type16 size)
 unsigned char ms_save_file(type8s *name, type8 *ptr, type16 size)
 {
   FILE *fh;
+  
+  if (strlen(savedgame_ptr) == 0) { return 1; }
   
   if (!(fh = fopen(savedgame_ptr, "wb"))) { return 1; }
   if (fwrite(ptr, 1, size, fh) != size) { return 1; }
@@ -173,18 +191,45 @@ uint32_t CDECL gms_init(char* name, char* gfxname, char* hntname, char* sndname)
   picture_current_id = -1;
   return (uint32_t)ms_init(name, gfxname, hntname, sndname);
 }
-uint32_t CDECL gms_rungame() { return (uint32_t)ms_rungame(); }
+uint32_t CDECL gms_rungame()
+{
+  uint32_t count = 4096;
+  type8 running = 1;
+  
+  while(running && (count > 0) && (text_has_prompt == 0) && (text_has_endline == 0))
+  {
+    running = ms_rungame();
+    count--;
+  }
+  
+  return (uint32_t)1;
+}
 uint32_t CDECL gms_freemem() { ms_freemem(); return (uint32_t)1; }
 
 uint32_t CDECL gms_has_text() { if (text_buffer_pos > 0) { return (uint32_t)1; } return (uint32_t)0; }
+uint32_t CDECL gms_has_prompt() { return text_has_prompt; }
 char* CDECL gms_get_text() { return text_buffer_ptr; }
+uint32_t CDECL gms_flush_text() { ms_flush(); return (uint32_t)1; }
+
 uint32_t CDECL gms_is_status_updated() { return (uint32_t)status_updated; }
-char* CDECL gms_get_status() { status_updated = 0; return status_buffer_ptr; }
+char* CDECL gms_get_status() { return status_buffer_ptr; }
+uint32_t CDECL gms_flush_status()
+{
+  status_updated = 0;
+  status_buffer_pos = 0;
+  memset(status_buffer_ptr, 0, STATUS_BUFFER_SIZE);
+  
+  return (uint32_t)1;
+}
+
 uint32_t CDECL gms_send_string(const char* action)
 {
   memset(action_buffer_ptr, 0, ACTION_BUFFER_SIZE);
   memcpy(action_buffer_ptr, action, MIN(strlen(action), ACTION_BUFFER_SIZE - 1));
   action_buffer_pos = 0;
+  
+  text_has_prompt = 0;
+
   return (uint32_t)1;
 }
 
@@ -217,9 +262,14 @@ PROC LibFunc[] =
   {"gms_freemem", "uint32_t CDECL gms_freemem();\n", gms_freemem},
 
   {"gms_has_text", "uint32_t CDECL gms_has_text();\n", gms_has_text},
+  {"gms_has_prompt", "uint32_t CDECL gms_has_prompt();\n", gms_has_prompt},
   {"gms_get_text", "char* CDECL gms_get_text();\n", gms_get_text},
+  {"gms_flush_text", "uint32_t CDECL gms_flush_text();\n", gms_flush_text},
+
   {"gms_is_status_updated", "uint32_t CDECL gms_is_status_updated();\n", gms_is_status_updated},
   {"gms_get_status", "char* CDECL gms_get_status();\n", gms_get_status},
+  {"gms_flush_status", "uint32_t CDECL gms_flush_status();\n", gms_flush_status},
+
   {"gms_send_string", "uint32_t CDECL gms_send_string(const char* action);\n", gms_send_string},
 
   {"gms_get_picture_current_id", "uint32_t CDECL gms_get_picture_current_id();\n", gms_get_picture_current_id},
@@ -239,7 +289,7 @@ PROC LibFunc[] =
   {"gms_get_fatal", "char* CDECL gms_get_fatal();\n", gms_get_fatal},
 };
 
-LDGLIB LibLdg[] = { { 0x0001, 22, LibFunc, "Magnetic v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
+LDGLIB LibLdg[] = { { 0x0001, 25, LibFunc, "Magnetic v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
 
 /*  */
 

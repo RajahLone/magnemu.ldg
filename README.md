@@ -1,6 +1,6 @@
 # magnemu.ldg
 
-Library using the LDG system and the Magnetic Scrolls Emulator.
+Library using the LDG system and the Magnetic Scrolls Intrepretor.
 
 Used by:
 
