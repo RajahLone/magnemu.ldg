@@ -158,11 +158,14 @@ uint32_t CDECL gms_init(char* name, char* gfxname, char* hntname, char* sndname)
   text_buffer_pos = 0;
   text_has_endline = 0;
   text_has_prompt = 0;
+  memset(text_buffer_ptr, 0, TEXT_BUFFER_SIZE);
 
   status_buffer_pos = 0;
   status_updated = 0;
+  memset(status_buffer_ptr, 0, STATUS_BUFFER_SIZE);
 
   action_buffer_pos = 0;
+  memset(action_buffer_ptr, 0, ACTION_BUFFER_SIZE);
 
   picture_current_id = -1;
   picture_rawdata = NULL;
