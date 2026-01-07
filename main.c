@@ -16,12 +16,9 @@
 
 /* global variables */
 
-#define SAVEDGAME_NAME_SIZE 384
 #define TEXT_BUFFER_SIZE 4096
 #define STATUS_BUFFER_SIZE 78
 #define ACTION_BUFFER_SIZE 256
-
-static char savedgame_ptr[SAVEDGAME_NAME_SIZE];
 
 static char* msg_fatal = NULL;
 static int32_t is_fatal = 0;
@@ -150,45 +147,28 @@ void ms_playmusic(type8 *midi_data, type32 length, type16 tempo)
   // TODO: if MIDI available?
 }
 
-unsigned char ms_load_file(type8s *name, type8 *ptr, type16 size)
-{
-  FILE *fh;
-  
-  if (strlen(savedgame_ptr) == 0) { return 1; }
-  
-  if (!(fh = fopen(savedgame_ptr, "rb"))) { return 1; }
-  if (fread(ptr, 1, size, fh) != size) { return 1; }
-  fclose(fh);
-
-  return 0;
-}
-unsigned char ms_save_file(type8s *name, type8 *ptr, type16 size)
-{
-  FILE *fh;
-  
-  if (strlen(savedgame_ptr) == 0) { return 1; }
-  
-  if (!(fh = fopen(savedgame_ptr, "wb"))) { return 1; }
-  if (fwrite(ptr, 1, size, fh) != size) { return 1; }
-  fclose(fh);
-  
-  return 0;
-}
+// loading and saving are entirely handled by the LDG client
+unsigned char ms_load_file(type8s *name, type8 *ptr, type16 size) { return 0; }
+unsigned char ms_save_file(type8s *name, type8 *ptr, type16 size) { return 0; }
 
 /* functions */
 
-uint32_t CDECL gms_seed(uint32_t seed) { ms_seed(seed); return (uint32_t)1; }
-
-uint32_t CDECL gms_set_saved_game(const char* name)
-{
-  memset(savedgame_ptr, 0, SAVEDGAME_NAME_SIZE);
-  memcpy(savedgame_ptr, name, MIN(strlen(name), SAVEDGAME_NAME_SIZE - 1));
-  return (uint32_t)1;
-}
-
 uint32_t CDECL gms_init(char* name, char* gfxname, char* hntname, char* sndname)
 {
+  text_buffer_pos = 0;
+  text_has_endline = 0;
+  text_has_prompt = 0;
+
+  status_buffer_pos = 0;
+  status_updated = 0;
+
+  action_buffer_pos = 0;
+
   picture_current_id = -1;
+  picture_rawdata = NULL;
+  picture_width = 0;
+  picture_height = 0;
+  
   return (uint32_t)ms_init(name, gfxname, hntname, sndname);
 }
 uint32_t CDECL gms_rungame()
@@ -196,7 +176,7 @@ uint32_t CDECL gms_rungame()
   uint32_t count = 4096;
   type8 running = 1;
   
-  while(running && (count > 0) && (text_has_prompt == 0) && (text_has_endline == 0))
+  while(running && (count > 0) && (text_has_prompt == 0) /*&& (text_has_endline == 0)*/)
   {
     running = ms_rungame();
     count--;
@@ -222,6 +202,7 @@ uint32_t CDECL gms_flush_status()
   return (uint32_t)1;
 }
 
+uint32_t CDECL gms_seed(uint32_t seed) { ms_seed(seed); return (uint32_t)1; }
 uint32_t CDECL gms_send_string(const char* action)
 {
   memset(action_buffer_ptr, 0, ACTION_BUFFER_SIZE);
@@ -254,9 +235,6 @@ char* CDECL gms_get_fatal() { return msg_fatal; }
 
 PROC LibFunc[] =
 {
-  {"gms_seed", "uint32_t CDECL gms_seed(uint32_t seed);\n", gms_seed},
-  {"gms_set_saved_game", "uint32_t CDECL gms_set_saved_game(const char* name);\n", gms_set_saved_game},
-
   {"gms_init", "uint32_t CDECL gms_init(char* name, char* gfxname, char* hntname, char* sndname);\n", gms_init},
   {"gms_rungame", "uint32_t CDECL gms_rungame();\n", gms_rungame},
   {"gms_freemem", "uint32_t CDECL gms_freemem();\n", gms_freemem},
@@ -270,6 +248,7 @@ PROC LibFunc[] =
   {"gms_get_status", "char* CDECL gms_get_status();\n", gms_get_status},
   {"gms_flush_status", "uint32_t CDECL gms_flush_status();\n", gms_flush_status},
 
+  {"gms_seed", "uint32_t CDECL gms_seed(uint32_t seed);\n", gms_seed},
   {"gms_send_string", "uint32_t CDECL gms_send_string(const char* action);\n", gms_send_string},
 
   {"gms_get_picture_current_id", "uint32_t CDECL gms_get_picture_current_id();\n", gms_get_picture_current_id},
@@ -289,7 +268,7 @@ PROC LibFunc[] =
   {"gms_get_fatal", "char* CDECL gms_get_fatal();\n", gms_get_fatal},
 };
 
-LDGLIB LibLdg[] = { { 0x0001, 25, LibFunc, "Magnetic v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
+LDGLIB LibLdg[] = { { 0x0001, 24, LibFunc, "Magnetic Scrolls Interpreter v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
 
 /*  */
 

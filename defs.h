@@ -58,9 +58,8 @@ typedef signed   int  type32s;
    Purpose: By default Magnetic plays animated graphics.
             Setting this switch to ignore animations, Magnetic shows the
             static parts of the images anyway!
-
-#define NO_ANIMATION
 */
+#define NO_ANIMATION
 
 /****************************************************************************\
 * Abstract functions
