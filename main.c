@@ -4,15 +4,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <gem.h>
 #include <ldg.h>
 
 #include "defs.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
-
-/* structures */
 
 /* global variables */
 
@@ -24,8 +21,8 @@
 static char* msg_fatal = NULL;
 static int32_t is_fatal = 0;
 
-static char load_name_ptr[FILE_BUFFER_SIZE];
-static char save_name_ptr[FILE_BUFFER_SIZE];
+static char load_name[FILE_BUFFER_SIZE];
+static char save_name[FILE_BUFFER_SIZE];
 
 static char text_buffer_ptr[TEXT_BUFFER_SIZE];
 static uint16_t text_buffer_pos = 0;
@@ -53,9 +50,11 @@ unsigned char ms_load_file(type8s *name, type8 *ptr, type16 size)
 {
 	FILE *fh;
 	
-  if (strlen(load_name_ptr) == 0) { return 1; }
+  if (load_name[0] == 0) { return 1; }
  
-	if (!(fh = fopen(load_name_ptr, "rb"))) { return 1; }
+  fh = fopen(load_name, "rb");
+
+  if (fh == NULL) { return 1; }
 
 	if (fread(ptr, 1, size, fh) != size) { return 1; }
 
@@ -68,11 +67,13 @@ unsigned char ms_save_file(type8s *name, type8 *ptr, type16 size)
 {
 	FILE *fh;
 
-  if (strlen(save_name_ptr) == 0) { return 1; }
+  if (save_name[0] == 0) { return 1; }
 
-	if (!(fh = fopen(save_name_ptr, "wb"))){ return 1; }
+  fh = fopen(save_name, "wb");
 	
-  if (fwrite(ptr, 1, size, fh) != size){ return 1; }
+  if (fh == NULL) { return 1; }
+	
+  if (fwrite(ptr, 1, size, fh) != size) { return 1; }
 	
   fclose(fh);
 	
@@ -206,8 +207,8 @@ uint32_t CDECL gms_init(char* name, char* gfxname, char* hntname, char* sndname)
   picture_width = 0;
   picture_height = 0;
   
-  memset(load_name_ptr, 0, FILE_BUFFER_SIZE);
-  memset(save_name_ptr, 0, FILE_BUFFER_SIZE);
+  memset(load_name, 0, FILE_BUFFER_SIZE);
+  memset(save_name, 0, FILE_BUFFER_SIZE);
   
   if (name == NULL) { return (uint32_t)0; }
   if (strlen(name) == 0) { return (uint32_t)0; }
@@ -278,9 +279,9 @@ uint32_t CDECL gms_set_load_name(const char* name)
 {
   if (name == NULL) { return (uint32_t)0; }
   if (strlen(name) == 0) { return (uint32_t)0; }
-  
-  memset(load_name_ptr, 0, FILE_BUFFER_SIZE);
-  memcpy(load_name_ptr, name, MIN(strlen(name), FILE_BUFFER_SIZE - 1));
+  if (strlen(name) > (FILE_BUFFER_SIZE -1)) { return (uint32_t)0; }
+
+  strcpy(load_name, name);
 
   return (uint32_t)1;
 }
@@ -288,6 +289,8 @@ uint32_t CDECL gms_load_game()
 {
   if (text_has_prompt == 1 && action_buffer_pos == 0)
   {
+    text_has_prompt = 0;
+ 
     action_buffer_ptr[action_buffer_pos++] = 0x4c; // L
     action_buffer_ptr[action_buffer_pos++] = 0x6f; // o
     action_buffer_ptr[action_buffer_pos++] = 0x61; // a
@@ -303,9 +306,9 @@ uint32_t CDECL gms_set_save_name(const char* name)
 {
   if (name == NULL) { return (uint32_t)0; }
   if (strlen(name) == 0) { return (uint32_t)0; }
+  if (strlen(name) > (FILE_BUFFER_SIZE -1)) { return (uint32_t)0; }
   
-  memset(save_name_ptr, 0, FILE_BUFFER_SIZE);
-  memcpy(save_name_ptr, name, MIN(strlen(name), FILE_BUFFER_SIZE - 1));
+  strcpy(save_name, name);
 
   return (uint32_t)1;
 }
@@ -313,6 +316,8 @@ uint32_t CDECL gms_save_game()
 {
   if (text_has_prompt == 1 && action_buffer_pos == 0)
   {
+    text_has_prompt = 0;
+
     action_buffer_ptr[action_buffer_pos++] = 0x53; // S
     action_buffer_ptr[action_buffer_pos++] = 0x61; // a
     action_buffer_ptr[action_buffer_pos++] = 0x76; // v
@@ -363,7 +368,7 @@ PROC LibFunc[] =
   {"gms_count", "uint32_t CDECL gms_count();\n", gms_count},
 
   {"gms_set_load_name", "uint32_t CDECL gms_set_load_name(const char* name);\n", gms_set_load_name},
-  {"gms_load_game", "uint32_t CDECL gms_save_game();\n", gms_load_game},
+  {"gms_load_game", "uint32_t CDECL gms_load_game();\n", gms_load_game},
   {"gms_set_save_name", "uint32_t CDECL gms_set_save_name(const char* name);\n", gms_set_save_name},
   {"gms_save_game", "uint32_t CDECL gms_save_game();\n", gms_save_game},
 
