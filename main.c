@@ -16,12 +16,16 @@
 
 /* global variables */
 
+#define FILE_BUFFER_SIZE 384
 #define TEXT_BUFFER_SIZE 4096
 #define STATUS_BUFFER_SIZE 78
 #define ACTION_BUFFER_SIZE 256
 
 static char* msg_fatal = NULL;
 static int32_t is_fatal = 0;
+
+static char load_name_ptr[FILE_BUFFER_SIZE];
+static char save_name_ptr[FILE_BUFFER_SIZE];
 
 static char text_buffer_ptr[TEXT_BUFFER_SIZE];
 static uint16_t text_buffer_pos = 0;
@@ -44,6 +48,36 @@ static uint16_t picture_palette[16];
 /* implemented functions */
 
 void ms_fatal(char* txt) { is_fatal = 1; msg_fatal = txt; }
+
+unsigned char ms_load_file(type8s *name, type8 *ptr, type16 size)
+{
+	FILE *fh;
+	
+  if (strlen(load_name_ptr) == 0) { return 1; }
+ 
+	if (!(fh = fopen(load_name_ptr, "rb"))) { return 1; }
+
+	if (fread(ptr, 1, size, fh) != size) { return 1; }
+
+	fclose(fh);
+
+	return 0;
+}
+
+unsigned char ms_save_file(type8s *name, type8 *ptr, type16 size)
+{
+	FILE *fh;
+
+  if (strlen(save_name_ptr) == 0) { return 1; }
+
+	if (!(fh = fopen(save_name_ptr, "wb"))){ return 1; }
+	
+  if (fwrite(ptr, 1, size, fh) != size){ return 1; }
+	
+  fclose(fh);
+	
+  return 0;
+}
 
 void ms_flush(void)
 {
@@ -147,14 +181,14 @@ void ms_playmusic(type8 *midi_data, type32 length, type16 tempo)
   // TODO: if MIDI available?
 }
 
-// loading and saving are entirely handled by the LDG client
-unsigned char ms_load_file(type8s *name, type8 *ptr, type16 size) { return 0; }
-unsigned char ms_save_file(type8s *name, type8 *ptr, type16 size) { return 0; }
-
 /* functions */
 
 uint32_t CDECL gms_init(char* name, char* gfxname, char* hntname, char* sndname)
 {
+  char *v_gfxname = NULL;
+  char *v_hntname = NULL;
+  char *v_sndname = NULL;
+  
   text_buffer_pos = 0;
   memset(text_buffer_ptr, 0, TEXT_BUFFER_SIZE);
   text_has_endline = 0;
@@ -172,7 +206,17 @@ uint32_t CDECL gms_init(char* name, char* gfxname, char* hntname, char* sndname)
   picture_width = 0;
   picture_height = 0;
   
-  return (uint32_t)ms_init(name, gfxname, hntname, sndname);
+  memset(load_name_ptr, 0, FILE_BUFFER_SIZE);
+  memset(save_name_ptr, 0, FILE_BUFFER_SIZE);
+  
+  if (name == NULL) { return (uint32_t)0; }
+  if (strlen(name) == 0) { return (uint32_t)0; }
+  
+  if (gfxname != NULL) { if (strlen(gfxname) > 0) { v_gfxname = gfxname; } }
+  if (hntname != NULL) { if (strlen(hntname) > 0) { v_hntname = hntname; } }
+  if (sndname != NULL) { if (strlen(sndname) > 0) { v_sndname = sndname; } }
+  
+  return (uint32_t)ms_init(name, v_gfxname, v_hntname, v_sndname);
 }
 uint32_t CDECL gms_rungame()
 {
@@ -230,6 +274,57 @@ uint32_t CDECL gms_status() { ms_status(); return (uint32_t)1; }
 uint32_t CDECL gms_stop() { ms_stop(); return (uint32_t)1; }
 uint32_t CDECL gms_count() { return (uint32_t)ms_count(); }
 
+uint32_t CDECL gms_set_load_name(const char* name)
+{
+  if (name == NULL) { return (uint32_t)0; }
+  if (strlen(name) == 0) { return (uint32_t)0; }
+  
+  memset(load_name_ptr, 0, FILE_BUFFER_SIZE);
+  memcpy(load_name_ptr, name, MIN(strlen(name), FILE_BUFFER_SIZE - 1));
+
+  return (uint32_t)1;
+}
+uint32_t CDECL gms_load_game()
+{
+  if (text_has_prompt == 1 && action_buffer_pos == 0)
+  {
+    action_buffer_ptr[action_buffer_pos++] = 0x4c; // L
+    action_buffer_ptr[action_buffer_pos++] = 0x6f; // o
+    action_buffer_ptr[action_buffer_pos++] = 0x61; // a
+    action_buffer_ptr[action_buffer_pos++] = 0x64; // d
+    action_buffer_ptr[action_buffer_pos++] = 0x23; // #
+    action_buffer_ptr[action_buffer_pos++] = 0x0a; // \n
+    
+    return (uint32_t)1;
+  }
+  return (uint32_t)0;
+}
+uint32_t CDECL gms_set_save_name(const char* name)
+{
+  if (name == NULL) { return (uint32_t)0; }
+  if (strlen(name) == 0) { return (uint32_t)0; }
+  
+  memset(save_name_ptr, 0, FILE_BUFFER_SIZE);
+  memcpy(save_name_ptr, name, MIN(strlen(name), FILE_BUFFER_SIZE - 1));
+
+  return (uint32_t)1;
+}
+uint32_t CDECL gms_save_game()
+{
+  if (text_has_prompt == 1 && action_buffer_pos == 0)
+  {
+    action_buffer_ptr[action_buffer_pos++] = 0x53; // S
+    action_buffer_ptr[action_buffer_pos++] = 0x61; // a
+    action_buffer_ptr[action_buffer_pos++] = 0x76; // v
+    action_buffer_ptr[action_buffer_pos++] = 0x65; // e
+    action_buffer_ptr[action_buffer_pos++] = 0x23; // #
+    action_buffer_ptr[action_buffer_pos++] = 0x0a; // \n
+     
+    return (uint32_t)1;
+  }
+  return (uint32_t)0;
+}
+
 uint32_t CDECL gms_is_fatal() { return is_fatal; }
 char* CDECL gms_get_fatal() { return msg_fatal; }
 
@@ -267,11 +362,16 @@ PROC LibFunc[] =
   {"gms_stop", "uint32_t CDECL gms_stop();\n", gms_stop},
   {"gms_count", "uint32_t CDECL gms_count();\n", gms_count},
 
+  {"gms_set_load_name", "uint32_t CDECL gms_set_load_name(const char* name);\n", gms_set_load_name},
+  {"gms_load_game", "uint32_t CDECL gms_save_game();\n", gms_load_game},
+  {"gms_set_save_name", "uint32_t CDECL gms_set_save_name(const char* name);\n", gms_set_save_name},
+  {"gms_save_game", "uint32_t CDECL gms_save_game();\n", gms_save_game},
+
   {"gms_is_fatal", "uint32_t CDECL gms_is_fatal();\n", gms_is_fatal},
   {"gms_get_fatal", "char* CDECL gms_get_fatal();\n", gms_get_fatal},
 };
 
-LDGLIB LibLdg[] = { { 0x0001, 24, LibFunc, "Magnetic Scrolls Interpreter v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
+LDGLIB LibLdg[] = { { 0x0001, 28, LibFunc, "Magnetic Scrolls Interpreter v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
 
 /*  */
 
