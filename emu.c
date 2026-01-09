@@ -1616,7 +1616,7 @@ type8 *reg_align(type8 * ptr, type8 size)
 	return ptr;
 }
 
-type32 read_reg(int i, int s)
+extern type32 read_reg(int i, int s)
 {
 	type8 *ptr;
 
@@ -1641,7 +1641,7 @@ type32 read_reg(int i, int s)
 	}
 }
 
-void write_reg(int i, int s, type32 val)
+extern void write_reg(int i, int s, type32 val)
 {
 	type8 *ptr;
 

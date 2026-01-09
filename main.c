@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <mint/sysbind.h>
 #include <ldg.h>
 
 #include "defs.h"
@@ -18,22 +19,29 @@
 #define STATUS_BUFFER_SIZE 78
 #define ACTION_BUFFER_SIZE 256
 
-static char* msg_fatal = NULL;
+static unsigned char* msg_fatal = NULL;
 static int32_t is_fatal = 0;
 
 static char load_name[FILE_BUFFER_SIZE];
 static char save_name[FILE_BUFFER_SIZE];
+static uint16_t is_file_mode = 0;
 
-static char text_buffer_ptr[TEXT_BUFFER_SIZE];
+static const unsigned char str_load[]  = { 0x6c, 0x6f, 0x61, 0x64, 0x0a, 0x00 };       // "load\n"
+static const unsigned char str_save[]  = { 0x73, 0x61, 0x76, 0x65, 0x0a, 0x00 };       // "save\n"
+static const unsigned char str_dummy[] = { 0x64, 0x75, 0x6d, 0x6d, 0x79, 0x0a, 0x00 }; // "dummy\n"
+static const unsigned char str_yes[]   = { 0x79, 0x0a, 0x00, 0x00 };                   // "y\n"
+
+static unsigned char text_buffer_ptr[TEXT_BUFFER_SIZE];
 static uint16_t text_buffer_pos = 0;
 static uint16_t text_has_endline = 0;
 static uint16_t text_has_prompt = 0;
+static uint16_t text_ask_input = 0;
 
-static char status_buffer_ptr[STATUS_BUFFER_SIZE];
+static unsigned char status_buffer_ptr[STATUS_BUFFER_SIZE];
 static uint16_t status_buffer_pos = 0;
 static uint16_t status_updated = 0;
 
-static char action_buffer_ptr[ACTION_BUFFER_SIZE];
+static unsigned char action_buffer_ptr[ACTION_BUFFER_SIZE];
 static uint16_t action_buffer_pos = 0;
 
 static char picture_current_id = -1;
@@ -44,11 +52,11 @@ static uint16_t picture_palette[16];
 
 /* implemented functions */
 
-void ms_fatal(char* txt) { is_fatal = 1; msg_fatal = txt; }
+void ms_fatal(char* txt) { is_fatal = 1; msg_fatal = (unsigned char *)txt; }
 
 unsigned char ms_load_file(type8s *name, type8 *ptr, type16 size)
 {
-	FILE *fh;
+	FILE *fh; int32_t r;
 	
   if (load_name[0] == 0) { return 1; }
  
@@ -56,16 +64,16 @@ unsigned char ms_load_file(type8s *name, type8 *ptr, type16 size)
 
   if (fh == NULL) { return 1; }
 
-	if (fread(ptr, 1, size, fh) != size) { return 1; }
+	r = fread(ptr, 1, size, fh);
 
 	fclose(fh);
 
-	return 0;
+	return (r == size) ? 0 : 1;
 }
 
 unsigned char ms_save_file(type8s *name, type8 *ptr, type16 size)
 {
-	FILE *fh;
+	FILE *fh; int32_t r;
 
   if (save_name[0] == 0) { return 1; }
 
@@ -73,11 +81,11 @@ unsigned char ms_save_file(type8s *name, type8 *ptr, type16 size)
 	
   if (fh == NULL) { return 1; }
 	
-  if (fwrite(ptr, 1, size, fh) != size) { return 1; }
+  r = fwrite(ptr, 1, size, fh);
 	
   fclose(fh);
 	
-  return 0;
+  return (r == size) ? 0 : 1;
 }
 
 void ms_flush(void)
@@ -85,9 +93,10 @@ void ms_flush(void)
   if (text_buffer_pos == 0) { return; }
   
   text_buffer_pos = 0;
-  text_has_endline = 0;
-  
   memset(text_buffer_ptr, 0, TEXT_BUFFER_SIZE);
+  
+  text_has_endline = 0;
+  text_ask_input = 0;
 }
 void ms_putchar(uint8_t c)
 {
@@ -99,7 +108,7 @@ void ms_putchar(uint8_t c)
         text_buffer_ptr[text_buffer_pos] = c;
         break;
       case 0x08:
-        if (text_buffer_pos > 0) { text_buffer_pos--; }
+        //if (text_buffer_pos > 0) { text_buffer_pos--; }
         break;
       case 0x0a:
         text_buffer_ptr[text_buffer_pos++] = c;
@@ -110,6 +119,7 @@ void ms_putchar(uint8_t c)
         text_has_prompt = 1;
         break;
       default:
+        if (is_file_mode) { if (0x3a) { text_ask_input = 1; } }
         text_buffer_ptr[text_buffer_pos++] = c;
     }
   }
@@ -135,14 +145,16 @@ void ms_statuschar(unsigned char c)
   }
 }
 
-uint8_t ms_getchar(type8 trans)
+unsigned char ms_getchar(type8 trans)
 {
-  uint8_t c = action_buffer_ptr[action_buffer_pos++];
+  unsigned char c;
   
+  if (action_buffer_pos < ACTION_BUFFER_SIZE) { c = action_buffer_ptr[action_buffer_pos++]; } else { c = 0x0a; }
+    
   if (c == 0x0a || c == 0)
   {
     action_buffer_pos = 0;
-    memset(action_buffer_ptr, 0, ACTION_BUFFER_SIZE);
+    memset(action_buffer_ptr, 0x0a, ACTION_BUFFER_SIZE);
   }
 
   return c;
@@ -200,7 +212,7 @@ uint32_t CDECL gms_init(char* name, char* gfxname, char* hntname, char* sndname)
   status_updated = 0;
 
   action_buffer_pos = 0;
-  memset(action_buffer_ptr, 0, ACTION_BUFFER_SIZE);
+  memset(action_buffer_ptr, 0x0a, ACTION_BUFFER_SIZE);
 
   picture_current_id = -1;
   picture_rawdata = NULL;
@@ -224,23 +236,25 @@ uint32_t CDECL gms_rungame()
   uint32_t count = 4096;
   type8 running = 1;
   
-  while(running && (count > 0) && (text_has_prompt == 0) /*&& (text_has_endline == 0)*/)
+  while(running && (count > 0) && (text_has_prompt == 0) /*&& (text_ask_input == 0) && (text_has_endline == 0)*/)
   {
     running = ms_rungame();
     count--;
   }
   
+  /*Cconws(text_buffer_ptr);*/
+     
   return (uint32_t)1;
 }
 uint32_t CDECL gms_freemem() { ms_freemem(); return (uint32_t)1; }
 
 uint32_t CDECL gms_has_text() { if (text_buffer_pos > 0) { return (uint32_t)1; } return (uint32_t)0; }
 uint32_t CDECL gms_has_prompt() { return text_has_prompt; }
-char* CDECL gms_get_text() { return text_buffer_ptr; }
+unsigned char* CDECL gms_get_text() { return text_buffer_ptr; }
 uint32_t CDECL gms_flush_text() { ms_flush(); return (uint32_t)1; }
 
 uint32_t CDECL gms_is_status_updated() { return (uint32_t)status_updated; }
-char* CDECL gms_get_status() { return status_buffer_ptr; }
+unsigned char* CDECL gms_get_status() { return status_buffer_ptr; }
 uint32_t CDECL gms_flush_status()
 {
   status_updated = 0;
@@ -251,11 +265,14 @@ uint32_t CDECL gms_flush_status()
 }
 
 uint32_t CDECL gms_seed(uint32_t seed) { ms_seed(seed); return (uint32_t)1; }
-uint32_t CDECL gms_send_string(const char* action)
+uint32_t CDECL gms_send_string(const unsigned char* action)
 {
-  memset(action_buffer_ptr, 0, ACTION_BUFFER_SIZE);
-  memcpy(action_buffer_ptr, action, MIN(strlen(action), ACTION_BUFFER_SIZE - 1));
+  /*Cconws(action);*/
+
   action_buffer_pos = 0;
+  memset(action_buffer_ptr, 0x0a, ACTION_BUFFER_SIZE);
+  
+  memcpy(action_buffer_ptr, action, MIN(strlen((char *)action), ACTION_BUFFER_SIZE - 1));
   
   text_has_prompt = 0;
 
@@ -289,15 +306,14 @@ uint32_t CDECL gms_load_game()
 {
   if (text_has_prompt == 1 && action_buffer_pos == 0)
   {
-    text_has_prompt = 0;
- 
-    action_buffer_ptr[action_buffer_pos++] = 0x4c; // L
-    action_buffer_ptr[action_buffer_pos++] = 0x6f; // o
-    action_buffer_ptr[action_buffer_pos++] = 0x61; // a
-    action_buffer_ptr[action_buffer_pos++] = 0x64; // d
-    action_buffer_ptr[action_buffer_pos++] = 0x23; // #
-    action_buffer_ptr[action_buffer_pos++] = 0x0a; // \n
+    is_file_mode = 1;
     
+    gms_send_string(str_load);  gms_rungame(); gms_flush_text();
+    gms_send_string(str_dummy); gms_rungame(); gms_flush_text();
+    gms_send_string(str_yes);   gms_rungame(); gms_flush_text();
+
+    is_file_mode = 0;
+
     return (uint32_t)1;
   }
   return (uint32_t)0;
@@ -316,22 +332,21 @@ uint32_t CDECL gms_save_game()
 {
   if (text_has_prompt == 1 && action_buffer_pos == 0)
   {
-    text_has_prompt = 0;
-
-    action_buffer_ptr[action_buffer_pos++] = 0x53; // S
-    action_buffer_ptr[action_buffer_pos++] = 0x61; // a
-    action_buffer_ptr[action_buffer_pos++] = 0x76; // v
-    action_buffer_ptr[action_buffer_pos++] = 0x65; // e
-    action_buffer_ptr[action_buffer_pos++] = 0x23; // #
-    action_buffer_ptr[action_buffer_pos++] = 0x0a; // \n
-     
+    is_file_mode = 1;
+    
+    gms_send_string(str_save);  gms_rungame(); gms_flush_text();
+    gms_send_string(str_dummy); gms_rungame(); gms_flush_text();
+    gms_send_string(str_yes);   gms_rungame(); gms_flush_text();
+    
+    is_file_mode = 0;
+    
     return (uint32_t)1;
   }
   return (uint32_t)0;
 }
 
 uint32_t CDECL gms_is_fatal() { return is_fatal; }
-char* CDECL gms_get_fatal() { return msg_fatal; }
+unsigned char* CDECL gms_get_fatal() { return msg_fatal; }
 
 
 /* populate functions list and info for the LDG */
@@ -344,11 +359,11 @@ PROC LibFunc[] =
 
   {"gms_has_text", "uint32_t CDECL gms_has_text();\n", gms_has_text},
   {"gms_has_prompt", "uint32_t CDECL gms_has_prompt();\n", gms_has_prompt},
-  {"gms_get_text", "char* CDECL gms_get_text();\n", gms_get_text},
+  {"gms_get_text", "unsigned char* CDECL gms_get_text();\n", gms_get_text},
   {"gms_flush_text", "uint32_t CDECL gms_flush_text();\n", gms_flush_text},
 
   {"gms_is_status_updated", "uint32_t CDECL gms_is_status_updated();\n", gms_is_status_updated},
-  {"gms_get_status", "char* CDECL gms_get_status();\n", gms_get_status},
+  {"gms_get_status", "unsigned char* CDECL gms_get_status();\n", gms_get_status},
   {"gms_flush_status", "uint32_t CDECL gms_flush_status();\n", gms_flush_status},
 
   {"gms_seed", "uint32_t CDECL gms_seed(uint32_t seed);\n", gms_seed},
@@ -367,13 +382,13 @@ PROC LibFunc[] =
   {"gms_stop", "uint32_t CDECL gms_stop();\n", gms_stop},
   {"gms_count", "uint32_t CDECL gms_count();\n", gms_count},
 
-  {"gms_set_load_name", "uint32_t CDECL gms_set_load_name(const char* name);\n", gms_set_load_name},
+  {"gms_set_load_name", "uint32_t CDECL gms_set_load_name(const unsigned char* name);\n", gms_set_load_name},
   {"gms_load_game", "uint32_t CDECL gms_load_game();\n", gms_load_game},
-  {"gms_set_save_name", "uint32_t CDECL gms_set_save_name(const char* name);\n", gms_set_save_name},
+  {"gms_set_save_name", "uint32_t CDECL gms_set_save_name(const unsigned char* name);\n", gms_set_save_name},
   {"gms_save_game", "uint32_t CDECL gms_save_game();\n", gms_save_game},
 
   {"gms_is_fatal", "uint32_t CDECL gms_is_fatal();\n", gms_is_fatal},
-  {"gms_get_fatal", "char* CDECL gms_get_fatal();\n", gms_get_fatal},
+  {"gms_get_fatal", "unsigned char* CDECL gms_get_fatal();\n", gms_get_fatal},
 };
 
 LDGLIB LibLdg[] = { { 0x0001, 28, LibFunc, "Magnetic Scrolls Interpreter v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
