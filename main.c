@@ -53,7 +53,8 @@ static uint16_t status_updated = 0;
 static unsigned char action_buffer_ptr[ACTION_BUFFER_SIZE];
 static uint16_t action_buffer_pos = 0;
 
-static char picture_current_id = -1;
+#define NO_PICTURE -1;
+static char picture_current_id = NO_PICTURE;
 static unsigned char* picture_rawdata = NULL;
 static uint16_t picture_width = 0;
 static uint16_t picture_height = 0;
@@ -193,7 +194,7 @@ void ms_showpic(type32 c, type8 mode)
   }
   else
   {
-    picture_current_id = -1;
+    picture_current_id = NO_PICTURE;
     picture_rawdata = NULL;
     picture_width = 0;
     picture_height = 0;
@@ -228,7 +229,7 @@ uint32_t CDECL gms_init(char* name, char* gfxname, char* hntname, char* sndname)
   action_buffer_pos = 0;
   memset(action_buffer_ptr, 0x0a, ACTION_BUFFER_SIZE);
 
-  picture_current_id = -1;
+  picture_current_id = NO_PICTURE;
   picture_rawdata = NULL;
   picture_width = 0;
   picture_height = 0;
@@ -324,7 +325,16 @@ uint32_t CDECL gms_load_game()
     
     gms_send_string(str_load);  gms_rungame(); gms_flush_text();
     gms_send_string(str_dummy); gms_rungame(); gms_flush_text();
-    gms_send_string(str_yes);   gms_rungame(); gms_flush_text();
+    gms_send_string(str_yes);
+
+    status_buffer_pos = 0;
+    memset(status_buffer_ptr, 0, STATUS_BUFFER_SIZE);
+    status_updated = 1;
+
+    picture_current_id = NO_PICTURE;
+    picture_rawdata = NULL;
+    picture_width = 0;
+    picture_height = 0;
 
     file_mode = FILE_MODE_DISABLED;
     ret = FILE_SUCCESS;
@@ -351,7 +361,7 @@ uint32_t CDECL gms_save_game()
     
     gms_send_string(str_save);  gms_rungame(); gms_flush_text();
     gms_send_string(str_dummy); gms_rungame(); gms_flush_text();
-    gms_send_string(str_yes);   gms_rungame(); gms_flush_text();
+    gms_send_string(str_yes);
 
     file_mode = FILE_MODE_DISABLED;
     
