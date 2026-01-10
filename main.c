@@ -22,9 +22,15 @@
 static unsigned char* msg_fatal = NULL;
 static int32_t is_fatal = 0;
 
+
+
 static char load_name[FILE_BUFFER_SIZE];
 static char save_name[FILE_BUFFER_SIZE];
-static uint16_t is_file_mode = 0;
+static uint16_t file_mode = 0;
+#define FILE_MODE_DISABLED 0
+#define FILE_MODE_ENABLED  1
+#define FILE_FAILED  0
+#define FILE_SUCCESS 1
 
 static const unsigned char str_load[]  = { 0x6c, 0x6f, 0x61, 0x64, 0x0a, 0x00 };       // "load\n"
 static const unsigned char str_save[]  = { 0x73, 0x61, 0x76, 0x65, 0x0a, 0x00 };       // "save\n"
@@ -33,9 +39,12 @@ static const unsigned char str_yes[]   = { 0x79, 0x0a, 0x00, 0x00 };            
 
 static unsigned char text_buffer_ptr[TEXT_BUFFER_SIZE];
 static uint16_t text_buffer_pos = 0;
-static uint16_t text_has_endline = 0;
-static uint16_t text_has_prompt = 0;
-static uint16_t text_ask_input = 0;
+static uint32_t text_end_type = 0;
+#define TEXT_NOT_ENDED         0
+#define TEXT_END_TYPE_LINEFEED 1
+#define TEXT_END_TYPE_PROMPT   2
+#define TEXT_END_TYPE_INPUT    3
+#define TEXT_END_TYPE_QUESTION 4
 
 static unsigned char status_buffer_ptr[STATUS_BUFFER_SIZE];
 static uint16_t status_buffer_pos = 0;
@@ -95,8 +104,7 @@ void ms_flush(void)
   text_buffer_pos = 0;
   memset(text_buffer_ptr, 0, TEXT_BUFFER_SIZE);
   
-  text_has_endline = 0;
-  text_ask_input = 0;
+  text_end_type = TEXT_NOT_ENDED;
 }
 void ms_putchar(uint8_t c)
 {
@@ -104,22 +112,29 @@ void ms_putchar(uint8_t c)
   {
     switch(c)
     {
-      case 0x00:
+      case 0x00: // string termination
         text_buffer_ptr[text_buffer_pos] = c;
         break;
-      case 0x08:
-        //if (text_buffer_pos > 0) { text_buffer_pos--; }
+      case 0x08: // backspace
+        if (text_buffer_pos > 0) { text_buffer_pos--; }
         break;
-      case 0x0a:
+      case 0x0a: // '\n'
         text_buffer_ptr[text_buffer_pos++] = c;
-        text_has_endline = 1;
+        text_end_type = TEXT_END_TYPE_LINEFEED;
         break;
-      case 0x3e:
-        //text_buffer_ptr[text_buffer_pos++] = 0x3c;
-        text_has_prompt = 1;
+      case 0x3a: // ':'
+        text_buffer_ptr[text_buffer_pos++] = c;
+        if (file_mode == FILE_MODE_ENABLED) { text_end_type = TEXT_END_TYPE_INPUT; }
+        break;
+      case 0x3e: // '>'
+        text_buffer_ptr[text_buffer_pos++] = c;
+        text_end_type = TEXT_END_TYPE_PROMPT;
+        break;
+      case 0x3f: // '?'
+        text_buffer_ptr[text_buffer_pos++] = c;
+        if (text_buffer_ptr[text_buffer_pos - 2] == 0x29 /* ')' before '?' */) { text_end_type = TEXT_END_TYPE_QUESTION; }
         break;
       default:
-        if (is_file_mode) { if (0x3a) { text_ask_input = 1; } }
         text_buffer_ptr[text_buffer_pos++] = c;
     }
   }
@@ -191,7 +206,7 @@ type8 ms_showhints(struct ms_hint * hints)
 }
 void ms_playmusic(type8 *midi_data, type32 length, type16 tempo)
 {
-  // TODO: if MIDI available?
+  // TODO? if MIDI available?
 }
 
 /* functions */
@@ -204,8 +219,7 @@ uint32_t CDECL gms_init(char* name, char* gfxname, char* hntname, char* sndname)
   
   text_buffer_pos = 0;
   memset(text_buffer_ptr, 0, TEXT_BUFFER_SIZE);
-  text_has_endline = 0;
-  text_has_prompt = 0;
+  text_end_type = TEXT_NOT_ENDED;
 
   status_buffer_pos = 0;
   memset(status_buffer_ptr, 0, STATUS_BUFFER_SIZE);
@@ -235,8 +249,9 @@ uint32_t CDECL gms_rungame()
 {
   uint32_t count = 4096;
   type8 running = 1;
+  text_end_type = TEXT_NOT_ENDED;
   
-  while(running && (count > 0) && (text_has_prompt == 0) /*&& (text_ask_input == 0) && (text_has_endline == 0)*/)
+  while(running && (count > 0) && (text_end_type < TEXT_END_TYPE_PROMPT))
   {
     running = ms_rungame();
     count--;
@@ -244,12 +259,11 @@ uint32_t CDECL gms_rungame()
   
   /*Cconws(text_buffer_ptr);*/
      
-  return (uint32_t)1;
+  return text_end_type;
 }
 uint32_t CDECL gms_freemem() { ms_freemem(); return (uint32_t)1; }
 
-uint32_t CDECL gms_has_text() { if (text_buffer_pos > 0) { return (uint32_t)1; } return (uint32_t)0; }
-uint32_t CDECL gms_has_prompt() { return text_has_prompt; }
+uint32_t CDECL gms_has_text() { return (uint32_t)(text_buffer_pos > 0 ? 1 : 0); }
 unsigned char* CDECL gms_get_text() { return text_buffer_ptr; }
 uint32_t CDECL gms_flush_text() { ms_flush(); return (uint32_t)1; }
 
@@ -273,8 +287,6 @@ uint32_t CDECL gms_send_string(const unsigned char* action)
   memset(action_buffer_ptr, 0x0a, ACTION_BUFFER_SIZE);
   
   memcpy(action_buffer_ptr, action, MIN(strlen((char *)action), ACTION_BUFFER_SIZE - 1));
-  
-  text_has_prompt = 0;
 
   return (uint32_t)1;
 }
@@ -304,19 +316,20 @@ uint32_t CDECL gms_set_load_name(const char* name)
 }
 uint32_t CDECL gms_load_game()
 {
-  if (text_has_prompt == 1 && action_buffer_pos == 0)
+  uint32_t ret = FILE_FAILED;
+
+  if (action_buffer_pos == 0)
   {
-    is_file_mode = 1;
+    file_mode = FILE_MODE_ENABLED;
     
     gms_send_string(str_load);  gms_rungame(); gms_flush_text();
     gms_send_string(str_dummy); gms_rungame(); gms_flush_text();
     gms_send_string(str_yes);   gms_rungame(); gms_flush_text();
 
-    is_file_mode = 0;
-
-    return (uint32_t)1;
+    file_mode = FILE_MODE_DISABLED;
+    ret = FILE_SUCCESS;
   }
-  return (uint32_t)0;
+  return ret;
 }
 uint32_t CDECL gms_set_save_name(const char* name)
 {
@@ -330,19 +343,21 @@ uint32_t CDECL gms_set_save_name(const char* name)
 }
 uint32_t CDECL gms_save_game()
 {
-  if (text_has_prompt == 1 && action_buffer_pos == 0)
+  uint32_t ret = FILE_FAILED;
+  
+  if (action_buffer_pos == 0)
   {
-    is_file_mode = 1;
+    file_mode = FILE_MODE_ENABLED;
     
     gms_send_string(str_save);  gms_rungame(); gms_flush_text();
     gms_send_string(str_dummy); gms_rungame(); gms_flush_text();
     gms_send_string(str_yes);   gms_rungame(); gms_flush_text();
+
+    file_mode = FILE_MODE_DISABLED;
     
-    is_file_mode = 0;
-    
-    return (uint32_t)1;
+    ret = FILE_SUCCESS;
   }
-  return (uint32_t)0;
+  return ret;
 }
 
 uint32_t CDECL gms_is_fatal() { return is_fatal; }
@@ -358,7 +373,6 @@ PROC LibFunc[] =
   {"gms_freemem", "uint32_t CDECL gms_freemem();\n", gms_freemem},
 
   {"gms_has_text", "uint32_t CDECL gms_has_text();\n", gms_has_text},
-  {"gms_has_prompt", "uint32_t CDECL gms_has_prompt();\n", gms_has_prompt},
   {"gms_get_text", "unsigned char* CDECL gms_get_text();\n", gms_get_text},
   {"gms_flush_text", "uint32_t CDECL gms_flush_text();\n", gms_flush_text},
 
@@ -391,7 +405,7 @@ PROC LibFunc[] =
   {"gms_get_fatal", "unsigned char* CDECL gms_get_fatal();\n", gms_get_fatal},
 };
 
-LDGLIB LibLdg[] = { { 0x0001, 28, LibFunc, "Magnetic Scrolls Interpreter v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
+LDGLIB LibLdg[] = { { 0x0001, 27, LibFunc, "Magnetic Scrolls Interpreter v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
 
 /*  */
 
