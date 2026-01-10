@@ -263,7 +263,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
-#include <time.h>
+//#include <time.h>
 #include "defs.h"
 
 #if defined(__MSDOS__) && defined(__BORLANDC__)
@@ -274,7 +274,7 @@
 //#define fopen(f,m)     lfopen(f,m)
 //#define malloc(s)      farmalloc(s)
 //#define free(p)        farfree(p)
-#define malloc(s)      ldg_Malloc(s)
+#define malloc(s)      ldg_Malloc((s + 7) & ~7)
 #define free(p)        ldg_Free(p)
 
 //extern long lfread(void far *, long, long, FILE far *);
@@ -685,7 +685,7 @@ type8 ms_init(type8s * name, type8s * gfxname, type8s * hntname, type8s * sndnam
 	else
 	{
 		undo_stat[0] = undo_stat[1] = 0;
-		ms_seed((type32)time(0));
+		ms_seed((type32)0); //time(0)); // raj: remove time() as FreeMiNT may only support it
 		if (!(fp = fopen(name, "rb")))
 			return 0;
 		if ((fread(header, 1, 42, fp) != 42) || (read_l(header) != 0x4d615363))
