@@ -274,7 +274,7 @@
 //#define fopen(f,m)     lfopen(f,m)
 //#define malloc(s)      farmalloc(s)
 //#define free(p)        farfree(p)
-#define malloc(s)      ldg_Malloc((s + 7) & ~7)
+#define malloc(s)      ldg_Malloc(s)
 #define free(p)        ldg_Free(p)
 
 //extern long lfread(void far *, long, long, FILE far *);
