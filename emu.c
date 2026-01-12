@@ -1588,7 +1588,8 @@ void log_status(void)
 
 void ms_status(void)
 {
-	int j;
+	// raj: remove all printf to reduce ldg size (thanks th-otto)
+  /*int j;
 
 	fprintf(stderr, "D0:");
 	for (j = 0; j < 8; j++)
@@ -1597,7 +1598,7 @@ void ms_status(void)
 	for (j = 0; j < 8; j++)
 		fprintf(stderr, " %8.8lx", (long) read_reg(8 + j, 3));
 	fprintf(stderr, "\nPC=%5.5lx ZCNV=%d%d%d%d - %ld instructions\n",
-		(long) pc, zflag & 1, cflag & 1, nflag & 1, vflag & 1, (long) i_count);
+		(long) pc, zflag & 1, cflag & 1, nflag & 1, vflag & 1, (long) i_count);*/
 }
 
 type32 ms_count(void)

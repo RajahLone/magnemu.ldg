@@ -301,7 +301,6 @@ uint16_t* CDECL gms_get_picture_palette() { return picture_palette; }
 uint32_t CDECL gms_is_running() { return (uint32_t)ms_is_running(); }
 uint32_t CDECL gms_is_magwin() { return (uint32_t)ms_is_magwin(); }
 
-uint32_t CDECL gms_status() { ms_status(); return (uint32_t)1; }
 uint32_t CDECL gms_stop() { ms_stop(); return (uint32_t)1; }
 uint32_t CDECL gms_count() { return (uint32_t)ms_count(); }
 
@@ -402,7 +401,6 @@ PROC LibFunc[] =
   {"gms_is_running", "uint32_t CDECL gms_is_running();\n", gms_is_running},
   {"gms_is_magwin", "uint32_t CDECL gms_is_magwin();\n", gms_is_magwin},
 
-  {"gms_status", "uint32_t CDECL gms_status();\n", gms_status},
   {"gms_stop", "uint32_t CDECL gms_stop();\n", gms_stop},
   {"gms_count", "uint32_t CDECL gms_count();\n", gms_count},
 
@@ -415,7 +413,7 @@ PROC LibFunc[] =
   {"gms_get_fatal", "unsigned char* CDECL gms_get_fatal();\n", gms_get_fatal},
 };
 
-LDGLIB LibLdg[] = { { 0x0001, 27, LibFunc, "Magnetic Scrolls Interpreter v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
+LDGLIB LibLdg[] = { { 0x0001, 26, LibFunc, "Magnetic Scrolls Interpreter v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
 
 /*  */
 
