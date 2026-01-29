@@ -35,31 +35,33 @@
 *       correct number of bits on your system !!!
 \*****************************************************************************/
 
-typedef unsigned char  type8;
-typedef char  type8s;
-typedef unsigned short type16;
-typedef signed   short type16s;
-typedef unsigned int  type32;
-typedef signed   int  type32s;
+#include <inttypes.h>
+
+//typedef unsigned char  type8;
+//typedef char  type8s;
+//typedef unsigned short type16;
+//typedef signed   short type16s;
+//typedef unsigned int  type32;
+//typedef signed   int  type32s;
+
+#define type8   unsigned char
+#define type8s  char
+#define type16  uint16_t
+#define type16s int16_t
+#define type32  uint32_t
+#define type32s int32_t
 
 /****************************************************************************\
 * Compile time switches 
 \****************************************************************************/
 
-/* Switch:  SAVEMEM
-   Purpose: Magnetic loads a complete graphics file into memory by default.
-            Setting this switch you tell Magnetic to load images on request
-            (saving memory, wasting load time)
-
-#define SAVEMEM
-*/
-
 /* Switch:  NO_ANIMATION
    Purpose: By default Magnetic plays animated graphics.
             Setting this switch to ignore animations, Magnetic shows the
             static parts of the images anyway!
-*/
+
 #define NO_ANIMATION
+*/
 
 /****************************************************************************\
 * Abstract functions
@@ -357,24 +359,6 @@ type8 ms_showhints(struct ms_hint * hints);
 \****************************************************************************/
 
 /****************************************************************************\
-* Function: ms_playmusic
-*
-* Purpose: Plays (or stops playing) a MIDI music score.
-*
-* Parameter:    type8 * midi_data       the MIDI data to play
-*               type32  length          the length of the MIDI data
-*               type16  tempo           the suggested tempo for playing
-*
-* Note: If midi_data is NULL, all that should happen is that any currently
-* playing music is stopped.
-* Note: The data returned contain a complete MIDI file header, so if pure
-*       memory processing is not applicable you can write the data to a
-*       temporary file and use external players or libraries.
-\****************************************************************************/
-
-void ms_playmusic(type8 * midi_data, type32 length, type16 tempo);
-
-/****************************************************************************\
 * Function: ms_init
 *
 * Purpose: Loads the interpreter with a game
@@ -391,7 +375,7 @@ void ms_playmusic(type8 * midi_data, type32 length, type16 tempo);
 * Note: You must call this function before starting the ms_rungame loop
 \****************************************************************************/
 
-type8 ms_init(type8s * name, type8s * gfxname, type8s * hntname, type8s * sndname);
+type8 ms_init(void *mag_buf, uint32_t mag_siz, void *gfx_ptr, uint32_t gfx_siz, void *hnt_buf, uint32_t hnt_siz);
 
 /****************************************************************************\
 * Function: ms_rungame
@@ -474,7 +458,6 @@ type32 ms_count(void);
 type8s *anim_name(type32 pic);
 type8 *ms_extract1(type8 pic, type16 * w, type16 * h, type16 * pal);
 type8 *ms_extract2(type8s * name, type16 * w, type16 * h, type16 * pal, type8 * is_anim);
-type8 *sound_extract(type8s * name, type32 * length, type16 * tempo);
 
 #endif /* MAGNETIC_DEFS_H */
 

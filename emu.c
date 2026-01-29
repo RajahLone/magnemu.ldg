@@ -265,6 +265,11 @@
 #include <stdarg.h>
 //#include <time.h>
 #include "defs.h"
+#include <ldg.h>
+#include <mint/sysbind.h>
+
+#define malloc(s)      ldg_Malloc(s)
+#define free(p)        ldg_Free(p)
 
 #if defined(__MSDOS__) && defined(__BORLANDC__)
 
@@ -274,8 +279,6 @@
 //#define fopen(f,m)     lfopen(f,m)
 //#define malloc(s)      farmalloc(s)
 //#define free(p)        farfree(p)
-#define malloc(s)      ldg_Malloc(s)
-#define free(p)        ldg_Free(p)
 
 //extern long lfread(void far *, long, long, FILE far *);
 //extern FILE far * lfopen(const char far *, const char far *);
@@ -293,10 +296,6 @@ type8 quick_flag = 0, gfx_ver = 0, *gfx_buf = 0, *gfx_data = 0;
 type8 *gfx2_hdr = 0, *gfx2_buf = 0;
 type8s *gfx2_name = 0;
 type16 gfx2_hsize = 0;
-FILE *gfx_fp = 0;
-type8 *snd_buf = 0, *snd_hdr = 0;
-type16 snd_hsize = 0;
-FILE *snd_fp = 0;
 
 const type8s undo_ok[] = "\n[Previous turn undone.]";
 const type8s undo_fail[] = "\n[You can't \"undo\" what hasn't been done!]";
@@ -416,7 +415,7 @@ type8 *effective(type32 ptr)
 
 type32 read_l(type8 * ptr)
 {
-	return (type32) ((type32) ptr[0] << 24 | (type32) ptr[1] << 16 | (type32) ptr[2] << 8 | (type32) ptr[3]);
+  return (type32) ((type32) ptr[0] << 24 | (type32) ptr[1] << 16 | (type32) ptr[2] << 8 | (type32) ptr[3]);
 }
 
 type16 read_w(type8 * ptr)
@@ -426,7 +425,7 @@ type16 read_w(type8 * ptr)
 
 void write_l(type8 * ptr, type32 val)
 {
-	ptr[3] = (type8) val;
+  ptr[3] = (type8) val;
 	val >>= 8;
 	ptr[2] = (type8) val;
 	val >>= 8;
@@ -437,14 +436,14 @@ void write_l(type8 * ptr, type32 val)
 
 void write_w(type8 * ptr, type16 val)
 {
-	ptr[1] = (type8) val;
+  ptr[1] = (type8) val;
 	val >>= 8;
 	ptr[0] = (type8) val;
 }
 
 type32 read_l2(type8 * ptr)
 {
-	return ((type32) ptr[1] << 24 | (type32) ptr[0] << 16 | (type32) ptr[3] << 8 | (type32) ptr[2]);
+  return ((type32) ptr[1] << 24 | (type32) ptr[0] << 16 | (type32) ptr[3] << 8 | (type32) ptr[2]);
 }
 
 type16 read_w2(type8 * ptr)
@@ -492,11 +491,8 @@ void ms_freemem(void)
 		free(gfx2_hdr);
 	if (gfx2_buf)
 		free(gfx2_buf);
-	if (gfx_fp)
-		fclose(gfx_fp);
 	gfx_data = gfx_buf = gfx2_hdr = gfx2_buf = 0;
 	gfx2_name = 0;
-	gfx_fp = 0;
 	gfx_ver = 0;
 	gfxtable = table_dist = 0;
 #ifndef NO_ANIMATION
@@ -513,13 +509,6 @@ void ms_freemem(void)
 		free(hint_contents);
 	hints = 0;
 	hint_contents = 0;
-	if (snd_hdr)
-		free(snd_hdr);
-	if (snd_buf)
-		free(snd_buf);
-	snd_hdr = 0;
-	snd_hsize = 0;
-	snd_buf = 0;
 }
 
 type8 ms_is_running(void)
@@ -537,141 +526,77 @@ void ms_stop(void)
 	running = 0;
 }
 
-type8 init_gfx1(type8* header)
+type8 init_gfx1(type8* header, void* gfx_ptr)
 {
-#ifdef SAVEMEM
-	type32 i;
-#endif
-
-	if (!(gfx_buf = malloc(MAX_PICTURE_SIZE)))
+  type32 gfx1_size;
+  
+  if (!(gfx_buf = malloc(MAX_PICTURE_SIZE)))
 	{
-		fclose(gfx_fp);
-		gfx_fp = 0;
 		return 1;
 	}
-#ifdef SAVEMEM
-	if (!(gfx_data = malloc(128)))
+ 
+  gfx1_size = read_l(header + 4) - 8;
+	if (!(gfx_data = malloc(gfx1_size)))
 	{
-#else
-	if (!(gfx_data = malloc(read_l(header + 4) - 8)))
-	{
-#endif
 		free(gfx_buf);
-		fclose(gfx_fp);
 		gfx_buf = 0;
-		gfx_fp = 0;
 		return 1;
 	}
-#ifdef SAVEMEM
-	if (!fread(gfx_data, 128, 1, gfx_fp))
-	{
-#else
-	if (!fread(gfx_data, read_l(header + 4) - 8, 1, gfx_fp))
-	{
-#endif
-		free(gfx_data);
-		free(gfx_buf);
-		fclose(gfx_fp);
-		gfx_data = gfx_buf = 0;
-		gfx_fp = 0;
-		return 1;
-	}
-
-#ifdef SAVEMEM
-	for (i = 0; i < 128; i += 4)
-		if (!read_l(gfx_data + i))
-			write_l(gfx_data + i, read_l(header + 4));
-#else
-	fclose(gfx_fp);
-	gfx_fp = 0;
-#endif
+	
+  memcpy(gfx_data, gfx_ptr + 8, gfx1_size);
 
 	gfx_ver = 1;
 	return 2;
 }
 
-type8 init_gfx2(type8* header)
+type8 init_gfx2(type8* header, void* gfx_ptr, type32 gfx_siz)
 {
 	if (!(gfx_buf = malloc(MAX_PICTURE_SIZE)))
 	{
-		fclose(gfx_fp);
-		gfx_fp = 0;
 		return 1;
 	}
+
+	if (!(gfx_data = malloc(gfx_siz)))
+	{
+		free(gfx_buf);
+		gfx_buf = 0;
+		return 1;
+	}
+	
+  memcpy(gfx_data, gfx_ptr, gfx_siz);
 
 	gfx2_hsize = read_w(header + 4);
-	if (!(gfx2_hdr = malloc(gfx2_hsize)))
+  if (!(gfx2_hdr = malloc(gfx2_hsize)))
 	{
+		free(gfx_data);
 		free(gfx_buf);
-		fclose(gfx_fp);
 		gfx_buf = 0;
-		gfx_fp = 0;
 		return 1;
 	}
 
-	fseek(gfx_fp, 6, SEEK_SET);
-	if (!fread(gfx2_hdr, gfx2_hsize, 1, gfx_fp))
-	{
-		free(gfx_buf);
-		free(gfx2_hdr);
-		fclose(gfx_fp);
-		gfx_buf = 0;
-		gfx2_hdr = 0;
-		gfx_fp = 0;
-		return 1;
-	}
+  gfx_ptr += 6;
+  memcpy(gfx2_hdr, gfx_ptr, gfx2_hsize);
 
 	gfx_ver = 2;
 	return 2;
 }
 
-type8 init_snd(type8* header)
-{
-	if (!(snd_buf = malloc(MAX_MUSIC_SIZE)))
-	{
-		fclose(snd_fp);
-		snd_fp = 0;
-		return 1;
-	}
 
-	snd_hsize = read_w(header + 4);
-	if (!(snd_hdr = malloc(snd_hsize)))
-	{
-		free(snd_buf);
-		fclose(snd_fp);
-		snd_buf = 0;
-		snd_fp = 0;
-		return 1;
-	}
-
-	fseek(snd_fp, 6, SEEK_SET);
-	if (!fread(snd_hdr, snd_hsize, 1, snd_fp))
-	{
-		free(snd_buf);
-		free(snd_hdr);
-		fclose(snd_fp);
-		snd_buf = 0;
-		snd_hdr = 0;
-		snd_fp = 0;
-		return 1;
-	}
-
-	return 2;
-}
 
 /* zero all registers and flags and load the game */
 
-type8 ms_init(type8s * name, type8s * gfxname, type8s * hntname, type8s * sndname)
+type8 ms_init(void *mag_buf, uint32_t mag_siz, void *gfx_ptr, uint32_t gfx_siz, void *hnt_buf, uint32_t hnt_siz)
 {
-	FILE *fp;
-	type8 header[42], header2[8],header3[4];
+  void *mag_ptr; mag_ptr = mag_buf;
+  void *hnt_ptr; hnt_ptr = hnt_buf;
+  type8 header[42], header2[8],header3[4];
 	type32 i, dict_size, string2_size, code_size, dec;
 
 #if defined(LOGEMU) || defined(LOGGFX) || defined(LOGHNT)
 	dbg_log = fopen(LOG_FILE, "wt");
 #endif
 	ms_stop();
-	if (!name)
+	if (!mag_buf)
 	{
 		if (!restart)
 			return 0;
@@ -685,19 +610,16 @@ type8 ms_init(type8s * name, type8s * gfxname, type8s * hntname, type8s * sndnam
 	else
 	{
 		undo_stat[0] = undo_stat[1] = 0;
-		ms_seed((type32)0); //time(0)); // raj: remove time() as FreeMiNT may only support it
-		if (!(fp = fopen(name, "rb")))
-			return 0;
-		if ((fread(header, 1, 42, fp) != 42) || (read_l(header) != 0x4d615363))
-		{
-			fclose(fp);
-			return 0;
-		}
-		if (read_l(header + 8) != 42)
-		{
-			fclose(fp);
-			return 0;
-		}
+		
+    ms_seed((type32)0); //time(0)); // raj: remove time() as FreeMiNT may only support it
+
+    if (mag_siz < 42) { return 0; }
+   
+    memcpy(header, mag_ptr, 42); mag_ptr += 42;
+		
+    if (read_l(header) != 0x4d615363) { return 0; }
+		if (read_l(header + 8) != 42) { return 0; }
+    
 		ms_freemem();
 		version = header[13];
 		code_size = read_l(header + 14);
@@ -724,7 +646,6 @@ type8 ms_init(type8s * name, type8s * gfxname, type8s * hntname, type8s * sndnam
 				!(dict = malloc(dict_size)))) 
 		{
 			ms_freemem();
-			fclose(fp);
 			return 0;
 		}
 		if (string_size > MAX_STRING_SIZE)
@@ -733,7 +654,6 @@ type8 ms_init(type8s * name, type8s * gfxname, type8s * hntname, type8s * sndnam
 			    !(string3 = malloc(string_size - MAX_STRING_SIZE)))
 			{
 				ms_freemem();
-				fclose(fp);
 				return 0;
 			}
 		}
@@ -742,59 +662,43 @@ type8 ms_init(type8s * name, type8s * gfxname, type8s * hntname, type8s * sndnam
 			if (!(string = malloc(string_size)))
 			{
 				ms_freemem();
-				fclose(fp);
 				return 0;
 			}
 		}
 		if (!(undo[0] = malloc(undo_size)) || !(undo[1] = malloc(undo_size)))
 		{
 			ms_freemem();
-			fclose(fp);
 			return 0;
 		}
-		if (fread(code, 1, code_size, fp) != code_size)
-		{
-			ms_freemem();
-			fclose(fp);
-			return 0;
-		}
+		
+    if (code_size > (mag_siz - 42)) { ms_freemem(); return 0; }
+    memcpy(code, mag_ptr, code_size); mag_ptr += code_size;
+
 		memcpy(restart, code, undo_size);	/* fast restarts */
-		if (string_size > MAX_STRING_SIZE)
+		
+    if (string_size > MAX_STRING_SIZE)
 		{
-			if (fread(string, 1, MAX_STRING_SIZE, fp) != MAX_STRING_SIZE)
-			{
-				ms_freemem();
-				fclose(fp);
-				return 0;
-			}
-			if (fread(string3, 1, string_size - MAX_STRING_SIZE, fp) != string_size - MAX_STRING_SIZE)
-			{
-				ms_freemem();
-				fclose(fp);
-				return 0;
-			}
+      if (MAX_STRING_SIZE > (mag_ptr - mag_buf)) { ms_freemem(); return 0; }
+      memcpy(string, mag_ptr, MAX_STRING_SIZE); mag_ptr += MAX_STRING_SIZE;
+			
+      if ((string_size - MAX_STRING_SIZE) > (mag_ptr - mag_buf)) { ms_freemem(); return 0; }
+      memcpy(string3, mag_ptr, string_size - MAX_STRING_SIZE); mag_ptr += (string_size - MAX_STRING_SIZE);
 		}
 		else
 		{
-			if (fread(string, 1, string_size, fp) != string_size)
-			{
-				ms_freemem();
-				fclose(fp);
-				return 0;
-			}
+      if (string_size > (mag_ptr - mag_buf)) { ms_freemem(); return 0; }
+      memcpy(string, mag_ptr, string_size); mag_ptr += string_size;
 		}
-		if (fread(string2, 1, string2_size, fp) != string2_size)
-		{
-			ms_freemem();
-			fclose(fp);
-			return 0;
-		}
-		if (sd && fread(dict, 1, dict_size, fp) != dict_size) 
-		{
-			ms_freemem();
-			fclose(fp);
-			return 0;
-		}
+    
+    if (string2_size > (mag_ptr - mag_buf)) { ms_freemem(); return 0; }
+    memcpy(string2, mag_ptr, string2_size); mag_ptr += string2_size;
+
+    if (sd)
+    {
+      if (dict_size > (mag_ptr - mag_buf)) { ms_freemem(); return 0; }
+      memcpy(dict, mag_ptr, dict_size); mag_ptr += dict_size;
+    }
+
 		dec = read_l(header + 30);
 		if (dec >= string_size)
 			decode_table = string2 + dec - string_size;
@@ -805,7 +709,6 @@ type8 ms_init(type8s * name, type8s * gfxname, type8s * hntname, type8s * sndnam
 			else
 				decode_table = string + dec;
 		}
-		fclose(fp);
 	}
 
 	for (i = 0; i < 8; i++)
@@ -816,16 +719,17 @@ type8 ms_init(type8s * name, type8s * gfxname, type8s * hntname, type8s * sndnam
 	i_count = 0;
 	running = 1;
 
-	if (!name)
+	if (!mag_buf)
 		return (type8) (gfx_buf ? 2 : 1);	/* Restarted */
 
 	if (version == 4)
 	{
 		/* Try loading a hint file */
-		FILE *hnt_fp;
-		if (hntname && (hnt_fp = fopen(hntname, "rb")))
+		if ((hnt_ptr) && (hnt_siz > 4))
 		{
-			if ((fread(&header3, 1, 4, hnt_fp) == 4) && (read_l(header3) == 0x4D614874))
+      memcpy(header3, hnt_ptr, 4); hnt_ptr += 4;
+   
+      if (read_l(header3) == 0x4D614874)
 			{
 				type8 buf[8];
 				type16 i,j,blkcnt,elcnt,ntype,elsize,conidx;
@@ -836,7 +740,8 @@ type8 ms_init(type8s * name, type8s * gfxname, type8s * hntname, type8s * sndnam
 				if ((hints != 0) && (hint_contents != 0))
 				{
 					/* Read number of blocks */
-					fread(&buf, 1, 2, hnt_fp);
+          memcpy(buf, hnt_ptr, 2); hnt_ptr += 2;
+
 					blkcnt = read_w2(buf);
 #ifdef LOGHNT
 					out2("Blocks: %d\n",blkcnt);
@@ -848,7 +753,7 @@ type8 ms_init(type8s * name, type8s * gfxname, type8s * hntname, type8s * sndnam
 						out2("\nBlock No. %d\n",i);
 #endif
 						/* Read number of elements */
-						fread(&buf, 1, 2, hnt_fp);
+            memcpy(buf, hnt_ptr, 2); hnt_ptr += 2;
 						elcnt = read_w2(buf);
 #ifdef LOGHNT
 						out2("Elements: %d\n",elcnt);
@@ -856,7 +761,7 @@ type8 ms_init(type8s * name, type8s * gfxname, type8s * hntname, type8s * sndnam
 						hints[i].elcount = elcnt;
 
 						/* Read node type */
-						fread(&buf, 1, 2, hnt_fp);
+						memcpy(buf, hnt_ptr, 2); hnt_ptr += 2;
 						ntype = read_w2(buf);
 #ifdef LOGHNT
 						if (ntype == 1)
@@ -871,9 +776,9 @@ type8 ms_init(type8s * name, type8s * gfxname, type8s * hntname, type8s * sndnam
 #endif
 						for (j = 0; j < elcnt; j++)
 						{
-							fread(&buf, 1, 2, hnt_fp);
+							memcpy(buf, hnt_ptr, 2); hnt_ptr += 2;
 							elsize = read_w2(buf);
-							fread(hint_contents+conidx, 1, elsize, hnt_fp);
+							memcpy(hint_contents+conidx, hnt_ptr, elsize); hnt_ptr += elsize;
 							hint_contents[conidx+elsize-1] = '\0';
 #ifdef LOGHNT
 							out2("%s\n",hint_contents+conidx);
@@ -889,7 +794,7 @@ type8 ms_init(type8s * name, type8s * gfxname, type8s * hntname, type8s * sndnam
 #endif
 							for (j = 0; j < elcnt; j++)
 							{
-								fread(&buf, 1, 2, hnt_fp);
+								memcpy(buf, hnt_ptr, 2); hnt_ptr += 2;
 								hints[i].links[j] = read_w2(buf);
 #ifdef LOGHNT
 								out2("%d\n",hints[i].links[j]);
@@ -898,7 +803,7 @@ type8 ms_init(type8s * name, type8s * gfxname, type8s * hntname, type8s * sndnam
 						}
 
 						/* Read the parent block */
-						fread(&buf, 1, 2, hnt_fp);
+						memcpy(buf, hnt_ptr, 2); hnt_ptr += 2;
 						hints[i].parent = read_w2(buf);
 #ifdef LOGHNT
 						out2("Parent: %d\n",hints[i].parent);
@@ -915,45 +820,19 @@ type8 ms_init(type8s * name, type8s * gfxname, type8s * hntname, type8s * sndnam
 					hint_contents = 0;
 				}
 			}
-			fclose(hnt_fp);
 		}
 
-		/* Try loading a music file */
-		if (sndname && (snd_fp = fopen(sndname, "rb")))
-		{
-			if (fread(&header2, 1, 8, snd_fp) != 8)
-			{
-				fclose(snd_fp);
-				snd_fp = 0;
-			}
-			else
-			{
-				if (read_l(header2) == 0x4D615364) /* MaSd */
-				{
-					init_snd(header2);
-#ifdef LOGSND
-					out2("Sound file loaded.\n");
-#endif
-				}
-			}
-		}
 	}
 
-	if (!gfxname || !(gfx_fp = fopen(gfxname, "rb")))
-		return 1;
-	if (fread(&header2, 1, 8, gfx_fp) != 8)
-	{
-		fclose(gfx_fp);
-		gfx_fp = 0;
-		return 1;
-	}
+  if (!gfx_ptr || (gfx_siz < 1)) { return 1; }
+
+  memcpy(header2, gfx_ptr, 8);
 
 	if (version < 4 && read_l(header2) == 0x4D615069) /* MaPi */
-		return init_gfx1(header2);
+		return init_gfx1(header2, gfx_ptr);
 	else if (version == 4 && read_l(header2) == 0x4D615032) /* MaP2 */
-		return init_gfx2(header2);
-	fclose(gfx_fp);
-	gfx_fp = 0;
+		return init_gfx2(header2, gfx_ptr, gfx_siz);
+
 	return 1;
 }
 
@@ -974,17 +853,8 @@ type8 *ms_extract1(type8 pic, type16 * w, type16 * h, type16 * pal)
 	type32 i, j, datasize, upsize, offset;
 
 	offset = read_l(gfx_data + 4 * pic);
-#ifdef SAVEMEM
-	if (fseek(gfx_fp, offset, SEEK_SET) < 0)
-		return 0;
-	datasize = read_l(gfx_data + 4 * (pic + 1)) - offset;
-	if (!(buffer = malloc(datasize)))
-		return 0;
-	if (fread(buffer, 1, datasize, gfx_fp) != datasize)
-		return 0;
-#else
+
 	buffer = gfx_data + offset - 8;
-#endif
 
 	for (i = 0; i < 16; i++)
 		pal[i] = read_w(buffer + 0x1c + 2 * i);
@@ -1026,9 +896,6 @@ type8 *ms_extract1(type8 pic, type16 * w, type16 * h, type16 * pal)
 	for (j = w[0]; j < upsize; j++)
 		gfx_buf[j] ^= gfx_buf[j - w[0]];
 
-#ifdef SAVEMEM
-	free(buffer);
-#endif
 	for (; h[0] > 0 && is_blank((type16)(h[0] - 1), w[0]); h[0]--);
 	for (i = 0; h[0] > 0 && is_blank((type16)i, w[0]); h[0]--, i++);
 	return gfx_buf + i * w[0];
@@ -1043,6 +910,7 @@ type16s find_name_in_header(type8s * name, type8 upper)
 	for (i = 0; i < 8; i++)
 		pic_name[i] = 0;
 	strncpy(pic_name,name,6);
+
 	if (upper)
 	{
 		for (i = 0; i < 8; i++)
@@ -1119,6 +987,7 @@ type8 *ms_extract2(type8s * name, type16 * w, type16 * h, type16 * pal, type8 * 
 	/* Find the uppercase (no animation) version of the picture first. */
 	header_pos = find_name_in_header(name,1);
 #endif
+
 	if (header_pos < 0)
 		header_pos = find_name_in_header(name,0);
 	if (header_pos < 0)
@@ -1139,19 +1008,7 @@ type8 *ms_extract2(type8s * name, type16 * w, type16 * h, type16 * pal, type8 * 
 		if (!gfx2_buf)
 			return 0;
 
-		if (fseek(gfx_fp, offset, SEEK_SET) < 0)
-		{
-			free(gfx2_buf);
-			gfx2_buf = 0;
-			return 0;
-		}
-
-		if (!fread(gfx2_buf, length, 1, gfx_fp))
-		{
-			free(gfx2_buf);
-			gfx2_buf = 0;
-			return 0;
-		}
+    memcpy(gfx2_buf, gfx_data + offset, length);
 
 		for (i = 0; i < 16; i++)
 			pal[i] = read_w2(gfx2_buf + 4 + (2 * i));
@@ -1164,7 +1021,6 @@ type8 *ms_extract2(type8s * name, type16 * w, type16 * h, type16 * pal, type8 * 
 		main_pic.plane_step = (type16)(main_pic.wbytes / 4);
 		main_pic.mask = (type8*)0;
 		extract_frame(&main_pic);
-
 		*w = main_pic.width;
 		*h = main_pic.height;
 
@@ -1478,47 +1334,6 @@ type8 ms_anim_is_repeating(void)
 #else
 	return 0;
 #endif
-}
-
-type16s find_name_in_sndheader(type8s * name)
-{
-	type16s header_pos = 0;
-
-	while (header_pos < snd_hsize)
-	{
-		type8s* hname = (type8s*)(snd_hdr + header_pos);
-		if (strcmp(hname,name) == 0)
-			return header_pos;
-		header_pos += 18;
-	}
-	return -1;
-}
-
-type8 *sound_extract(type8s * name, type32 * length, type16 * tempo)
-{
-	type32 offset = 0;
-	type16s header_pos = -1;
-
-	if (header_pos < 0)
-		header_pos = find_name_in_sndheader(name);
-	if (header_pos < 0)
-		return 0;
-
-	*tempo = read_w(snd_hdr + header_pos + 8);
-	offset = read_l(snd_hdr + header_pos + 10);
-	*length = read_l(snd_hdr + header_pos + 14);
-
-	if (offset != 0)
-	{
-		if (!snd_buf)
-			return 0;
-		if (fseek(snd_fp, offset, SEEK_SET) < 0)
-			return 0;
-		if (!fread(snd_buf, (int)(*length), 1, snd_fp))
-			return 0;
-		return snd_buf;
-	}
-	return 0;
 }
 
 void save_undo(void)
@@ -2974,24 +2789,6 @@ void do_line_a(void)
 				break;
 
 			case 13: /* Music */
-				switch ((code+a1reg+3)[0])
-				{
-				case 0: /* stop music */
-					ms_playmusic(0,0,0);
-					break;
-				default: /* play music */
-#ifdef LOGSND
-					out2("MUSIC IS %s\n", code + a1reg + 3);
-#endif
-					{
-						type32 length = 0;
-						type16 tempo = 0;
-						type8* midi = sound_extract((char*)code + a1reg + 3,&length,&tempo);
-						if (midi != NULL)
-							ms_playmusic(midi,length,tempo);
-					}
-					break;
-				}
 				break;
 			}
 			break;
@@ -3116,7 +2913,7 @@ void do_line_a(void)
 			ms_stop();	/* infinite loop A0ED */
 			break;
 		case 17:
-			if (!ms_init(0, 0, 0, 0))
+			if (!ms_init(0, 0, 0, 0, 0, 0))
 				ms_stop();	/* restart game ie. pc, sp etc. A0EE */
 			break;
 		case 18:	/* printer A0EF */

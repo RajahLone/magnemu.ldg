@@ -8,7 +8,7 @@ LDLIBS  = -lldg
 TARGET = magnemu.ldg
 
 # list header files here
-HEADER = 
+HEADER = defs.h
 
 # list C files here
 #
