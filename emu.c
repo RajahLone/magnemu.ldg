@@ -4169,5 +4169,6 @@ type8 ms_rungame(void)
 
 type8s *anim_name(type32 pic)
 {
-	return (type8s*)(code + pic);
+	if (pic == 0) { return NULL; }
+  return (type8s*)(code + pic);
 }
