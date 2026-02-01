@@ -187,15 +187,15 @@ unsigned char ms_getchar(type8 trans)
   return c;
 }
 
-void gms_list_animation(void)
+uint32_t gms_list_animation(void)
 {
   struct ms_position *positions;
     
   uint16_t count, i;
 
-  if (ms_animate(&positions, &count) == 0) { picture_animated = FALSE; return; }
+  if (ms_animate(&positions, &count) == 0) { picture_animated = FALSE; return 0; }
 
-  if (count > MAX_FRAMES) { return; }
+  if (count > MAX_FRAMES) { return 0; }
 
   // clean
   for (i = 0; i < MAX_FRAMES; i++)
@@ -220,6 +220,8 @@ void gms_list_animation(void)
     frames[i].rawdata = ms_get_anim_frame(positions[i].number, &(frames[i].width), &(frames[i].height), &(frames[i].rawmask));
   }
   frames_count = count;
+  
+  return (uint32_t)count;
 }
 void ms_showpic(type32 c, type8 mode)
 {
@@ -234,8 +236,6 @@ void ms_showpic(type32 c, type8 mode)
     {
       picture_current_id = c;
       picture_current_an = anim_name(c);
-
-      if (picture_animated) { gms_list_animation(); }
     }
   }
   else
@@ -328,12 +328,14 @@ uint32_t CDECL gms_send_string(const char* action)
 }
 
 int32_t CDECL gms_get_picture_current_id() { return (int32_t)picture_current_id; }
-unsigned char* CDECL gms_get_picture_rawdata() {  return picture_rawdata; }
+char* CDECL gms_get_picture_current_an() { return (char *)picture_current_an; }
+
 uint32_t CDECL gms_get_picture_width() { return (uint32_t)picture_width; }
 uint32_t CDECL gms_get_picture_height() { return (uint32_t)picture_height; }
+unsigned char* CDECL gms_get_picture_rawdata() {  return picture_rawdata; }
 uint16_t* CDECL gms_get_picture_palette() { return picture_palette; }
 
-char* CDECL gms_get_picture_current_an() { return (char *)picture_current_an; }
+uint32_t CDECL gms_is_picture_animated() { return (uint32_t)picture_animated; }
 uint32_t CDECL gms_get_frame_count() { return (uint32_t)frames_count; }
 uint32_t CDECL gms_get_frame_number(uint32_t i) { if (i < frames_count) { return (uint32_t)(frames[i].number); } return (uint32_t)0; }
 uint32_t CDECL gms_get_frame_left(uint32_t i) { if (i < frames_count) { return (uint32_t)(frames[i].left); } return (uint32_t)0; }
@@ -449,12 +451,15 @@ PROC LibFunc[] =
   {"gms_send_string", "uint32_t gms_send_string(const char* action);\n", gms_send_string},
 
   {"gms_get_picture_current_id", "int32_t gms_get_picture_current_id();\n", gms_get_picture_current_id},
-  {"gms_get_picture_rawdata", "unsigned char* gms_get_picture_rawdata();\n", gms_get_picture_rawdata},
+  {"gms_get_picture_current_an", "char* gms_get_picture_current_an();\n", gms_get_picture_current_an},
+
   {"gms_get_picture_width", "uint32_t gms_get_picture_width();\n", gms_get_picture_width},
   {"gms_get_picture_height", "uint32_t gms_get_picture_height();\n", gms_get_picture_height},
+  {"gms_get_picture_rawdata", "unsigned char* gms_get_picture_rawdata();\n", gms_get_picture_rawdata},
   {"gms_get_picture_palette", "uint16_t* gms_get_picture_palette();\n", gms_get_picture_palette},
 
-  {"gms_get_picture_current_an", "char* gms_get_picture_current_an();\n", gms_get_picture_current_an},
+  {"gms_is_picture_animated", "uint32_t gms_is_picture_animated();\n", gms_is_picture_animated},
+  {"gms_list_animation", "uint32_t gms_list_animation();\n", gms_list_animation},
   {"gms_get_frame_count", "uint32_t gms_get_frame_count();\n", gms_get_frame_count},
   {"gms_get_frame_number", "uint32_t gms_get_frame_number(uint32_t i);\n", gms_get_frame_number},
   {"gms_get_frame_left", "uint32_t gms_get_frame_left(uint32_t i);\n", gms_get_frame_left},
@@ -481,7 +486,7 @@ PROC LibFunc[] =
   {"gms_get_fatal", "unsigned char* gms_get_fatal();\n", gms_get_fatal},
 };
 
-LDGLIB LibLdg[] = { { 0x0002, 36, LibFunc, "Magnetic Scrolls Interpreter v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
+LDGLIB LibLdg[] = { { 0x0002, 38, LibFunc, "Magnetic Scrolls Interpreter v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
 
 /*  */
 
