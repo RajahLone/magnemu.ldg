@@ -71,6 +71,8 @@ static unsigned char picture_animated = FALSE;
 static uint16_t frames_count = 0;
 static char *picture_current_an = NULL;
 
+static struct ms_hint *hints_list;
+
 /* implemented functions */
 
 void ms_fatal(char* txt) { is_fatal = 1; msg_fatal = (unsigned char *)txt; }
@@ -249,9 +251,9 @@ void ms_showpic(type32 c, type8 mode)
   }
 }
 
-type8 ms_showhints(struct ms_hint * hints)
+type8 ms_showhints(struct ms_hint *hints)
 {
-  // TODO: handle hints
+  hints_list = hints;
   return 1;
 }
 
@@ -275,6 +277,8 @@ uint32_t CDECL gms_init(char* mag_buf, uint32_t mag_len, char* gfx_ptr, uint32_t
   picture_width = 0;
   picture_height = 0;
   picture_animated = FALSE;
+  
+  hints_list = NULL;
   
   memset(load_name, 0, FILE_BUFFER_SIZE);
   memset(save_name, 0, FILE_BUFFER_SIZE);
@@ -344,6 +348,8 @@ uint32_t CDECL gms_get_frame_width(uint32_t i) { if (i < frames_count) { return 
 uint32_t CDECL gms_get_frame_height(uint32_t i) { if (i < frames_count) { return (uint32_t)(frames[i].height); } return (uint32_t)0; }
 unsigned char* CDECL gms_get_frame_rawdata(uint32_t i) { if (i < frames_count) { return frames[i].rawdata; } return NULL; }
 unsigned char* CDECL gms_get_frame_rawmask(uint32_t i) { if (i < frames_count) { return frames[i].rawmask; } return NULL; }
+
+struct ms_hint* CDECL gms_get_hints_list() { return hints_list; }
 
 uint32_t CDECL gms_is_running() { return (uint32_t)ms_is_running(); }
 uint32_t CDECL gms_is_magwin() { return (uint32_t)ms_is_magwin(); }
@@ -426,6 +432,16 @@ uint32_t CDECL gms_enable_graphics()
   }
   return ret;
 }
+uint32_t CDECL gms_enable_hints()
+{
+  uint32_t ret = ms_is_magwin();
+  
+  if (ret == 1)
+  {
+    gms_send_string("hints\n"); gms_rungame(); gms_flush_text();
+  }
+  return ret;
+}
 
 uint32_t CDECL gms_is_fatal() { return is_fatal; }
 unsigned char* CDECL gms_get_fatal() { return msg_fatal; }
@@ -469,6 +485,8 @@ PROC LibFunc[] =
   {"gms_get_frame_rawdata", "unsigned char* gms_get_frame_rawdata(uint32_t i);\n", gms_get_frame_rawdata},
   {"gms_get_frame_rawmask", "unsigned char* gms_get_frame_rawmask(uint32_t i);\n", gms_get_frame_rawmask},
 
+  {"gms_get_hints_list", "struct ms_hint* gms_get_hints_list();\n", gms_get_hints_list},
+
   {"gms_is_running", "uint32_t gms_is_running();\n", gms_is_running},
   {"gms_is_magwin", "uint32_t gms_is_magwin();\n", gms_is_magwin},
 
@@ -481,12 +499,13 @@ PROC LibFunc[] =
   {"gms_save_game", "uint32_t gms_save_game();\n", gms_save_game},
 
   {"gms_enable_graphics", "uint32_t gms_enable_graphics();\n", gms_enable_graphics},
+  {"gms_enable_hints", "uint32_t gms_enable_hints();\n", gms_enable_hints},
 
   {"gms_is_fatal", "uint32_t gms_is_fatal();\n", gms_is_fatal},
   {"gms_get_fatal", "unsigned char* gms_get_fatal();\n", gms_get_fatal},
 };
 
-LDGLIB LibLdg[] = { { 0x0002, 38, LibFunc, "Magnetic Scrolls Interpreter v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
+LDGLIB LibLdg[] = { { 0x0002, 40, LibFunc, "Magnetic Scrolls Interpreter v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
 
 /*  */
 
