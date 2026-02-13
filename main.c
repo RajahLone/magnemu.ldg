@@ -59,8 +59,6 @@ static uint16_t picture_palette[16];
 struct picture_frame
 {
   int16_t number;
-  int16_t left;
-  int16_t top;
   uint16_t width;
   uint16_t height;
   unsigned char* rawdata;
@@ -71,7 +69,9 @@ static unsigned char picture_animated = FALSE;
 static uint16_t frames_count = 0;
 static char *picture_current_an = NULL;
 
-static struct ms_hint *hints_list;
+struct ms_position *anim_positions;
+
+struct ms_hint *hints_list;
 
 /* implemented functions */
 
@@ -189,48 +189,13 @@ unsigned char ms_getchar(type8 trans)
   return c;
 }
 
-uint32_t gms_list_animation(void)
-{
-  struct ms_position *positions;
-    
-  uint16_t count, i;
-
-  if (ms_animate(&positions, &count) == 0) { picture_animated = FALSE; return 0; }
-
-  if (count > MAX_FRAMES) { return 0; }
-
-  // clean
-  for (i = 0; i < MAX_FRAMES; i++)
-  {
-    frames[i].number = -1;
-    frames[i].left = 0;
-    frames[i].top = 0;
-    frames[i].width = 0;
-    frames[i].height = 0;
-    frames[i].rawdata = NULL;
-    frames[i].rawmask = NULL;
-  }
-  frames_count = 0;
-    
-  // list
-  for (i = 0; i < count; i++)
-  {
-    frames[i].number = positions[i].number;
-    frames[i].left   = positions[i].x;
-    frames[i].top    = positions[i].y;
-      
-    frames[i].rawdata = ms_get_anim_frame(positions[i].number, &(frames[i].width), &(frames[i].height), &(frames[i].rawmask));
-  }
-  frames_count = count;
-  
-  return (uint32_t)count;
-}
 void ms_showpic(type32 c, type8 mode)
 {
   if (mode > 0)
   {
     picture_current_id = NO_PICTURE;
     picture_current_an = NULL;
+    picture_animated = FALSE;
     
     picture_rawdata = ms_extract(c, &picture_width, &picture_height, picture_palette, &picture_animated);
 
@@ -238,6 +203,12 @@ void ms_showpic(type32 c, type8 mode)
     {
       picture_current_id = c;
       picture_current_an = anim_name(c);
+    }
+    else
+    {
+      picture_width = 0;
+      picture_height = 0;
+      picture_animated = FALSE;
     }
   }
   else
@@ -340,10 +311,39 @@ unsigned char* CDECL gms_get_picture_rawdata() {  return picture_rawdata; }
 uint16_t* CDECL gms_get_picture_palette() { return picture_palette; }
 
 uint32_t CDECL gms_is_picture_animated() { return (uint32_t)picture_animated; }
+uint32_t CDECL gms_is_repeating() { return (uint32_t)ms_anim_is_repeating(); }
+uint32_t gms_list_frames(void)
+{
+  uint16_t count, i;
+
+  if (ms_animate(&anim_positions, &count) == 0) { picture_animated = FALSE; return 0; }
+
+  if (count > MAX_FRAMES) { return 0; }
+
+  // clean
+  for (i = 0; i < MAX_FRAMES; i++)
+  {
+    frames[i].number = -1;
+    frames[i].width = 0;
+    frames[i].height = 0;
+    frames[i].rawdata = NULL;
+    frames[i].rawmask = NULL;
+  }
+  frames_count = 0;
+    
+  // list
+  for (i = 0; i < count; i++)
+  {
+    frames[i].number = anim_positions[i].number;
+    frames[i].rawdata = ms_get_anim_frame(anim_positions[i].number, &(frames[i].width), &(frames[i].height), &(frames[i].rawmask));
+  }
+  frames_count = count;
+  
+  return (uint32_t)count;
+}
+struct ms_position * CDECL gms_get_positions() { return anim_positions; }
 uint32_t CDECL gms_get_frame_count() { return (uint32_t)frames_count; }
 uint32_t CDECL gms_get_frame_number(uint32_t i) { if (i < frames_count) { return (uint32_t)(frames[i].number); } return (uint32_t)0; }
-uint32_t CDECL gms_get_frame_left(uint32_t i) { if (i < frames_count) { return (uint32_t)(frames[i].left); } return (uint32_t)0; }
-uint32_t CDECL gms_get_frame_top(uint32_t i) { if (i < frames_count) { return (uint32_t)(frames[i].top); } return (uint32_t)0; }
 uint32_t CDECL gms_get_frame_width(uint32_t i) { if (i < frames_count) { return (uint32_t)(frames[i].width); } return (uint32_t)0; }
 uint32_t CDECL gms_get_frame_height(uint32_t i) { if (i < frames_count) { return (uint32_t)(frames[i].height); } return (uint32_t)0; }
 unsigned char* CDECL gms_get_frame_rawdata(uint32_t i) { if (i < frames_count) { return frames[i].rawdata; } return NULL; }
@@ -475,12 +475,12 @@ PROC LibFunc[] =
   {"gms_get_picture_palette", "uint16_t* gms_get_picture_palette();\n", gms_get_picture_palette},
 
   {"gms_is_picture_animated", "uint32_t gms_is_picture_animated();\n", gms_is_picture_animated},
-  {"gms_list_animation", "uint32_t gms_list_animation();\n", gms_list_animation},
+  {"gms_list_frames", "uint32_t gms_list_frames();\n", gms_list_frames},
+  {"gms_get_positions", "struct ms_position* gms_get_positions();\n", gms_get_positions},
+  {"gms_is_repeating", "uint32_t gms_is_repeating();\n", gms_is_repeating},
   {"gms_get_frame_count", "uint32_t gms_get_frame_count();\n", gms_get_frame_count},
   {"gms_get_frame_number", "uint32_t gms_get_frame_number(uint32_t i);\n", gms_get_frame_number},
-  {"gms_get_frame_left", "uint32_t gms_get_frame_left(uint32_t i);\n", gms_get_frame_left},
-  {"gms_get_frame_top", "uint32_t gms_get_frame_top(uint32_t i);\n", gms_get_frame_top},
-  {"gms_get_frame_width", "uint32_t gms_get_frame_width(uint32_t i);\n", gms_get_frame_width},
+  {"gms_get_frame_width", "int32_t gms_get_frame_width(uint32_t i);\n", gms_get_frame_width},
   {"gms_get_frame_height", "uint32_t gms_get_frame_height(uint32_t i);\n", gms_get_frame_height},
   {"gms_get_frame_rawdata", "unsigned char* gms_get_frame_rawdata(uint32_t i);\n", gms_get_frame_rawdata},
   {"gms_get_frame_rawmask", "unsigned char* gms_get_frame_rawmask(uint32_t i);\n", gms_get_frame_rawmask},
