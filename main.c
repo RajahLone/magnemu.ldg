@@ -58,20 +58,20 @@ static uint16_t picture_palette[16];
 #define MAX_FRAMES 20
 struct picture_frame
 {
-  int16_t number;
+  uint16_t number;
   uint16_t width;
   uint16_t height;
   unsigned char* rawdata;
   unsigned char* rawmask;
 };
-struct picture_frame frames[MAX_FRAMES];
+static struct picture_frame frames[MAX_FRAMES];
 static unsigned char picture_animated = FALSE;
 static uint16_t frames_count = 0;
 static char *picture_current_an = NULL;
 
-struct ms_position *anim_positions;
+static struct ms_position *anim_positions;
 
-struct ms_hint *hints_list;
+static struct ms_hint *hints_list;
 
 /* implemented functions */
 
@@ -232,6 +232,8 @@ type8 ms_showhints(struct ms_hint *hints)
 
 uint32_t CDECL gms_init(char* mag_buf, uint32_t mag_len, char* gfx_ptr, uint32_t gfx_len, char* hnt_buf, uint32_t hnt_len)
 {
+  uint16_t i;
+
   text_buffer_pos = 0;
   memset(text_buffer_ptr, 0, TEXT_BUFFER_SIZE);
   text_end_type = TEXT_NOT_ENDED;
@@ -248,7 +250,12 @@ uint32_t CDECL gms_init(char* mag_buf, uint32_t mag_len, char* gfx_ptr, uint32_t
   picture_width = 0;
   picture_height = 0;
   picture_animated = FALSE;
-  
+
+  for (i = 0; i < MAX_FRAMES; i++)
+  {
+    if (frames[i].rawdata) { ldg_Free(frames[i].rawdata); }
+  }
+
   hints_list = NULL;
   
   memset(load_name, 0, FILE_BUFFER_SIZE);
@@ -272,7 +279,19 @@ uint32_t CDECL gms_rungame()
      
   return text_end_type;
 }
-uint32_t CDECL gms_freemem() { ms_freemem(); return (uint32_t)1; }
+uint32_t CDECL gms_freemem()
+{
+  uint16_t i;
+  
+  for (i = 0; i < MAX_FRAMES; i++)
+  {
+    if (frames[i].rawdata) { ldg_Free(frames[i].rawdata); }
+  }
+  
+  ms_freemem();
+  
+  return (uint32_t)1;
+}
 
 uint32_t CDECL gms_has_text() { return (uint32_t)(text_buffer_pos > 0 ? 1 : 0); }
 unsigned char* CDECL gms_get_text() { return text_buffer_ptr; }
@@ -311,11 +330,12 @@ unsigned char* CDECL gms_get_picture_rawdata() {  return picture_rawdata; }
 uint16_t* CDECL gms_get_picture_palette() { return picture_palette; }
 
 uint32_t CDECL gms_is_picture_animated() { return (uint32_t)picture_animated; }
-uint32_t CDECL gms_is_repeating() { return (uint32_t)ms_anim_is_repeating(); }
 uint32_t gms_list_frames(void)
 {
   uint16_t count, i;
-
+  unsigned char *data;
+  uint32_t size;
+  
   if (ms_animate(&anim_positions, &count) == 0) { picture_animated = FALSE; return 0; }
 
   if (count > MAX_FRAMES) { return 0; }
@@ -323,10 +343,10 @@ uint32_t gms_list_frames(void)
   // clean
   for (i = 0; i < MAX_FRAMES; i++)
   {
-    frames[i].number = -1;
+    frames[i].number = 0;
     frames[i].width = 0;
     frames[i].height = 0;
-    frames[i].rawdata = NULL;
+    if (frames[i].rawdata) { ldg_Free(frames[i].rawdata); } frames[i].rawdata = NULL;
     frames[i].rawmask = NULL;
   }
   frames_count = 0;
@@ -335,7 +355,13 @@ uint32_t gms_list_frames(void)
   for (i = 0; i < count; i++)
   {
     frames[i].number = anim_positions[i].number;
-    frames[i].rawdata = ms_get_anim_frame(anim_positions[i].number, &(frames[i].width), &(frames[i].height), &(frames[i].rawmask));
+    
+    data = ms_get_anim_frame(anim_positions[i].number, &(frames[i].width), &(frames[i].height), &(frames[i].rawmask));
+    size = frames[i].width * frames[i].height;
+    
+    frames[i].rawdata = ldg_Malloc(size);
+    
+    if (frames[i].rawdata) { memcpy(frames[i].rawdata, data, size); }
   }
   frames_count = count;
   
@@ -477,7 +503,6 @@ PROC LibFunc[] =
   {"gms_is_picture_animated", "uint32_t gms_is_picture_animated();\n", gms_is_picture_animated},
   {"gms_list_frames", "uint32_t gms_list_frames();\n", gms_list_frames},
   {"gms_get_positions", "struct ms_position* gms_get_positions();\n", gms_get_positions},
-  {"gms_is_repeating", "uint32_t gms_is_repeating();\n", gms_is_repeating},
   {"gms_get_frame_count", "uint32_t gms_get_frame_count();\n", gms_get_frame_count},
   {"gms_get_frame_number", "uint32_t gms_get_frame_number(uint32_t i);\n", gms_get_frame_number},
   {"gms_get_frame_width", "int32_t gms_get_frame_width(uint32_t i);\n", gms_get_frame_width},
@@ -505,7 +530,7 @@ PROC LibFunc[] =
   {"gms_get_fatal", "unsigned char* gms_get_fatal();\n", gms_get_fatal},
 };
 
-LDGLIB LibLdg[] = { { 0x0002, 40, LibFunc, "Magnetic Scrolls Interpreter v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
+LDGLIB LibLdg[] = { { 0x0002, 39, LibFunc, "Magnetic Scrolls Interpreter v2.3 (c) Niclas Karlsson, 1997-2008", 1} };
 
 /*  */
 
